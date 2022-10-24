@@ -1,0 +1,19 @@
+[package]
+name = "client"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+common = { path = "../common" }
+storage = { path = "../storage" }
+storage_derive = { path = "../storage/derive" }
+
+flume = "0.10"
+tokio = { version = "1.21", features = ["rt-multi-thread", "time", "macros"] }
+parking_lot = "0.12"
+toml = "0.5"
+serde = { version = "1.0", features = ["derive"] }
+tower = "0.4"
+reqwest = { version = "0.11", features = ["json"] }
+clap = { version = "4.0", features = ["derive"] }
+tracing = "0.1"

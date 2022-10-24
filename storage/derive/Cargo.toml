@@ -1,0 +1,17 @@
+[package]
+name = "storage_derive"
+version = "0.1.0"
+authors = ["JLer <jlerxky@live.com>"]
+edition = "2021"
+categories = ["game"]
+homepage = "https://www.theprimestar.com"
+keywords = ["game", "bevy"]
+readme = "README.md"
+repository = "https://github.com/JLerxky/the_prime_island/storage/derive"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = "1.0"
+quote = "1.0"

@@ -123,10 +123,41 @@ impl SledStorage {
 }
 
 #[test]
-pub fn sequence() {
+pub fn test() {
+    // test sequence
     let store = SledStorage::init("../test_db");
     println!("{}", store.current("test"));
-    for _ in 0..100 {
+    for _ in 0..10 {
         println!("{}", store.next("test"));
+    }
+
+    // test
+    #[derive(storage_derive::StorageData, Debug, Clone, Default, Deserialize, Serialize)]
+    struct Data {
+        key: String,
+        value: String,
+    }
+
+    for i in 0..10 {
+        let data = Data {
+            key: format!("key-{i}"),
+            value: format!("value-{i}"),
+        };
+        store.insert(format!("key-{i}"), data);
+    }
+
+    let mut data_set = vec![];
+    for i in 0..10 {
+        let data: Data = store.get(format!("key-{i}")).unwrap();
+        data_set.push(data);
+    }
+
+    store.remove::<Data>("key-9");
+
+    let data_all = store.all::<Data>();
+
+    for i in 0..9 {
+        assert_eq!(data_set[i].key, data_all[i].key);
+        assert_eq!(data_set[i].value, data_all[i].value);
     }
 }

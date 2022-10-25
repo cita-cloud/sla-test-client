@@ -18,7 +18,7 @@ use storage_derive::StorageData;
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Resp {
-    pub status: String,
+    pub status: u8,
     pub data: Option<String>,
     pub message: String,
 }
@@ -29,12 +29,12 @@ pub struct Record {
     pub api: String,
     pub data: String,
     pub resp: Option<Resp>,
-    pub status: String,
+    pub status: u8,
 }
 
 impl Record {
     pub fn add_resp(&mut self, resp: Resp) {
-        self.status = resp.status.clone();
+        self.status = resp.status;
         self.resp = Some(resp);
     }
 }

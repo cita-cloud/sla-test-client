@@ -2,4 +2,4 @@ sender_interval = 30
 checker_interval = 10
 log_filter = "info"
 storage_path = "test_db"
-cache_url = "http://192.168.10.120:32056"
+cache_url = "http://192.168.10.120:31932"

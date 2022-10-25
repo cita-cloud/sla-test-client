@@ -38,3 +38,17 @@ impl Record {
         self.resp = Some(resp);
     }
 }
+
+#[derive(StorageData, Debug, Clone, Default, Deserialize, Serialize)]
+pub struct UnverifiedTX {
+    pub tx_hash: String,
+    pub sent_timestamp: u64,
+}
+
+#[derive(StorageData, Debug, Clone, Default, Deserialize, Serialize)]
+pub struct VerifiedResult {
+    pub timestamp: u64,
+    pub sent_num: u8,
+    pub failed_num: u8,
+    pub success_num: u8,
+}

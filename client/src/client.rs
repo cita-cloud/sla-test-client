@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::unix_now;
+use common::time::unix_now;
 use storage::{sledb::SledStorage, Storage};
 use tracing::{error, info, warn};
 
@@ -55,7 +55,7 @@ pub async fn start(config: &Config) {
                 {
                     Ok(resp) => match resp.json::<Resp>().await {
                         Ok(resp) => {
-                            info!("{:#?}", resp);
+                            info!("Post '{}': {:?}", &record.api, resp);
                             record.add_resp(resp);
                         }
                         Err(e) => warn!("decoding resp from '{}' failed: {}", &record.api, e),
@@ -86,7 +86,7 @@ pub async fn start(config: &Config) {
                 {
                     Ok(resp) => match resp.json::<Resp>().await {
                         Ok(resp) => {
-                            info!("{:#?}", resp);
+                            info!(" Get '{}': {:?}", &record.api, resp);
                             record.add_resp(resp);
                         }
                         Err(e) => warn!("decoding resp from '{}' failed: {}", &record.api, e),

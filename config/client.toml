@@ -1,5 +1,19 @@
 sender_interval = 30
 checker_interval = 10
-log_filter = "info"
+log_filter = "debug,hyper=info"
 storage_path = "test_db"
-cache_url = "http://192.168.10.120:31932"
+cache_url = "http://192.168.10.120:31157"
+data_for_send = [
+    """{\r
+        "data": "0x",\r
+        "quota": 1073741824,\r
+        "to": "524268b46968103ce8323353dab16ae857f09a6f",\r
+        "value": "0x0"\r
+    }""",
+    """{\r
+        "data": "0x",\r
+        "quota": 1073741824,\r
+        "to": "524268b46968103ce8323353dab16ae857f09a6a",\r
+        "value": "0x0"\r
+    }""",
+]

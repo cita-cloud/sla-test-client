@@ -22,6 +22,7 @@ pub struct Config {
     pub log_filter: String,
     pub storage_path: String,
     pub cache_url: String,
+    pub data_for_send: Vec<String>,
 }
 
 impl Default for Config {
@@ -32,6 +33,7 @@ impl Default for Config {
             log_filter: "info".to_string(),
             storage_path: "test_db".to_string(),
             cache_url: "http://127.0.0.1:32056".to_string(),
+            data_for_send: vec![],
         }
     }
 }

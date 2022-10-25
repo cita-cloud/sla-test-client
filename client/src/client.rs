@@ -23,70 +23,16 @@ use crate::{
 
 pub async fn start(config: &Config) {
     let storage = SledStorage::init(&config.storage_path);
+    let http_client = reqwest::ClientBuilder::default().build().unwrap();
+
     let mut sender_interval =
         tokio::time::interval(tokio::time::Duration::from_secs(config.sender_interval));
     let mut checker_interval =
         tokio::time::interval(tokio::time::Duration::from_secs(config.checker_interval));
-    let http_client = reqwest::ClientBuilder::default().build().unwrap();
-
     loop {
         tokio::select! {
             _ = sender_interval.tick() => {
-                let mut record = Record {
-                    timestamp: unix_now(),
-                    api: "api/sendTx".to_string(),
-                    data: "{
-                                \"data\": \"0x\",
-                                \"quota\": 1073741824,
-                                \"to\": \"524268b46968103ce8323353dab16ae857f09a6f\",
-                                \"value\": \"0x0\"
-                            }"
-                    .to_string(),
-                    resp: None,
-                    status: 0,
-                };
-
-                match http_client
-                    .post(format!("{}/{}", &config.cache_url, &record.api))
-                    .header("Content-Type", "application/json")
-                    .body(record.data.clone())
-                    .send()
-                    .await
-                {
-                    Ok(resp) => match resp.json::<Resp>().await {
-                        Ok(resp) => {
-                            info!("Post '{}': {:?}", &record.api, resp);
-                            record.add_resp(resp.clone());
-                            // save UnverifiedTX
-                            if resp.status == 1 {
-                                let utx = UnverifiedTX {
-                                    tx_hash: resp.data.unwrap(),
-                                    sent_timestamp: record.timestamp,
-                                };
-                                debug!("insert: {:?}", &utx);
-                                storage.insert(&utx.tx_hash.clone(), utx);
-                            }
-                        }
-                        Err(e) => error!("decoding resp from '{}' failed: {}", &record.api, e),
-                    },
-                    Err(e) => error!("Call '{}' failed: {}", &record.api, e),
-                }
-
-                // When the call or decode fails, the sent_failed_num at the current moment is incremented
-                let current_minute = ms_to_minute_scale(record.timestamp);
-                let mut vr = storage
-                    .get::<VerifiedResult>(current_minute.to_be_bytes())
-                    .unwrap_or_else(|| VerifiedResult::new(current_minute));
-                if record.status == 1 {
-                    vr.sent_num += 1;
-                } else {
-                    vr.sent_failed_num += 1;
-                }
-                debug!("insert: {:?}", &vr);
-                storage.insert(current_minute.to_be_bytes(), vr);
-
-                debug!("insert: {:?}", &record);
-                storage.insert(record.timestamp.to_be_bytes(), record);
+                sender(&http_client, config, &storage).await;
             },
             _ = checker_interval.tick() => {
                 // TODO
@@ -120,5 +66,58 @@ pub async fn start(config: &Config) {
                 storage.insert(format!("{}", &record.timestamp), record);
             }
         }
+    }
+}
+
+async fn sender(http_client: &reqwest::Client, config: &Config, storage: &SledStorage) {
+    for data in &config.data_for_send {
+        let mut record = Record {
+            timestamp: unix_now(),
+            api: "api/sendTx".to_string(),
+            data: data.to_string(),
+            resp: None,
+            status: 0,
+        };
+        match http_client
+            .post(format!("{}/{}", &config.cache_url, &record.api))
+            .header("Content-Type", "application/json")
+            .body(record.data.clone())
+            .send()
+            .await
+        {
+            Ok(resp) => match resp.json::<Resp>().await {
+                Ok(resp) => {
+                    info!("Post '{}': {:?}", &record.api, resp);
+                    record.add_resp(resp.clone());
+                    // save UnverifiedTX
+                    if resp.status == 1 {
+                        let utx = UnverifiedTX {
+                            tx_hash: resp.data.unwrap(),
+                            sent_timestamp: record.timestamp,
+                        };
+                        debug!("insert: {:?}", &utx);
+                        storage.insert(&utx.tx_hash.clone(), utx);
+                    }
+                }
+                Err(e) => error!("decoding resp from '{}' failed: {}", &record.api, e),
+            },
+            Err(e) => error!("Call '{}' failed: {}", &record.api, e),
+        }
+
+        // When the call or decode fails, the sent_failed_num at the current moment is incremented
+        let current_minute = ms_to_minute_scale(record.timestamp);
+        let mut vr = storage
+            .get::<VerifiedResult>(current_minute.to_be_bytes())
+            .unwrap_or_else(|| VerifiedResult::new(current_minute));
+        if record.status == 1 {
+            vr.sent_num += 1;
+        } else {
+            vr.sent_failed_num += 1;
+        }
+        debug!("insert: {:?}", &vr);
+        storage.insert(current_minute.to_be_bytes(), vr);
+
+        debug!("insert: {:?}", &record);
+        storage.insert(record.timestamp.to_be_bytes(), record);
     }
 }

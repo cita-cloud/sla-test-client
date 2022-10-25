@@ -35,6 +35,14 @@ impl Storage for SledStorage {
         None
     }
 
+    fn all<T: for<'a> Deserialize<'a> + StorageData>(&self) -> Vec<T> {
+        let tree = self.sledb.open_tree(&T::name()).unwrap();
+        tree.iter()
+            .values()
+            .map(|v| bincode::deserialize::<T>(&v.unwrap()).unwrap())
+            .collect::<Vec<T>>()
+    }
+
     fn insert<T: Serialize + StorageData>(&self, key: impl AsRef<[u8]>, value: T) -> Option<T> {
         let tree = self.sledb.open_tree(&T::name()).unwrap();
         if tree

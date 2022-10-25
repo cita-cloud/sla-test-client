@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod mdbx;
 pub mod sledb;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
@@ -23,6 +22,7 @@ pub trait StorageData: Debug + Clone + Default + for<'a> Deserialize<'a> + Seria
 
 pub trait Storage: Debug + Clone {
     fn get<T: for<'a> Deserialize<'a> + StorageData>(&self, key: impl AsRef<[u8]>) -> Option<T>;
+    fn all<T: for<'a> Deserialize<'a> + StorageData>(&self) -> Vec<T>;
     fn insert<T: Serialize + StorageData>(&self, key: impl AsRef<[u8]>, value: T) -> Option<T>;
     fn remove<T: Serialize + StorageData>(&self, key: impl AsRef<[u8]>) -> bool;
     fn next(&self, name: &str) -> u32;

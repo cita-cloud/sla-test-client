@@ -49,6 +49,19 @@ pub struct UnverifiedTX {
 pub struct VerifiedResult {
     pub timestamp: u64,
     pub sent_num: u8,
+    pub sent_failed_num: u8,
     pub failed_num: u8,
     pub success_num: u8,
+}
+
+impl VerifiedResult {
+    pub fn new(timestamp: u64) -> Self {
+        Self {
+            timestamp,
+            sent_num: 0,
+            sent_failed_num: 0,
+            failed_num: 0,
+            success_num: 0,
+        }
+    }
 }

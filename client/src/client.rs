@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common::time::unix_now;
+use common::time::{ms_to_minute_scale, unix_now};
 use storage::{sledb::SledStorage, Storage};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info};
 
 use crate::{
     config::Config,
-    record::{Record, Resp},
+    record::{Record, Resp, UnverifiedTX, VerifiedResult},
 };
 
 pub async fn start(config: &Config) {
@@ -56,15 +56,37 @@ pub async fn start(config: &Config) {
                     Ok(resp) => match resp.json::<Resp>().await {
                         Ok(resp) => {
                             info!("Post '{}': {:?}", &record.api, resp);
-                            record.add_resp(resp);
+                            record.add_resp(resp.clone());
+                            // save UnverifiedTX
+                            if resp.status == 1 {
+                                let utx = UnverifiedTX {
+                                    tx_hash: resp.data.unwrap(),
+                                    sent_timestamp: record.timestamp,
+                                };
+                                debug!("insert: {:?}", &utx);
+                                storage.insert(&utx.tx_hash.clone(), utx);
+                            }
                         }
-                        Err(e) => warn!("decoding resp from '{}' failed: {}", &record.api, e),
+                        Err(e) => error!("decoding resp from '{}' failed: {}", &record.api, e),
                     },
                     Err(e) => error!("Call '{}' failed: {}", &record.api, e),
                 }
 
-                // TODO
-                storage.insert(format!("{}", &record.timestamp), record);
+                // When the call or decode fails, the sent_failed_num at the current moment is incremented
+                let current_minute = ms_to_minute_scale(record.timestamp);
+                let mut vr = storage
+                    .get::<VerifiedResult>(current_minute.to_be_bytes())
+                    .unwrap_or_else(|| VerifiedResult::new(current_minute));
+                if record.status == 1 {
+                    vr.sent_num += 1;
+                } else {
+                    vr.sent_failed_num += 1;
+                }
+                debug!("insert: {:?}", &vr);
+                storage.insert(current_minute.to_be_bytes(), vr);
+
+                debug!("insert: {:?}", &record);
+                storage.insert(record.timestamp.to_be_bytes(), record);
             },
             _ = checker_interval.tick() => {
                 // TODO
@@ -89,7 +111,7 @@ pub async fn start(config: &Config) {
                             info!(" Get '{}': {:?}", &record.api, resp);
                             record.add_resp(resp);
                         }
-                        Err(e) => warn!("decoding resp from '{}' failed: {}", &record.api, e),
+                        Err(e) => error!("decoding resp from '{}' failed: {}", &record.api, e),
                     },
                     Err(e) => error!("Call '{}' failed: {}", &record.api, e),
                 }

@@ -14,6 +14,7 @@
 
 mod client;
 mod config;
+mod metrics;
 mod record;
 
 use clap::Parser;

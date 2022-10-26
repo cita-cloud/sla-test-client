@@ -22,9 +22,9 @@ use std::convert::Infallible;
 use std::sync::mpsc::Receiver;
 
 pub async fn start(metrics_port: u16, vr_receiver: Receiver<VerifiedResult>) {
-    let histogram = register_histogram!("SLA test", "SLA test", vec![0.5],).unwrap();
+    let histogram = register_histogram!("SLA_test", "SLA test", vec![0.5],).unwrap();
 
-    tokio::spawn(async move { run_metrics_exporter(metrics_port) });
+    tokio::spawn(run_metrics_exporter(metrics_port));
 
     loop {
         let vr = vr_receiver.recv().unwrap();

@@ -31,7 +31,7 @@ pub async fn start(config: &Config) {
 
     let (vr_sender, vr_receiver) = mpsc::channel::<VerifiedResult>();
     let metrics_port = config.metrics_port;
-    tokio::spawn(async move { crate::metrics::start(metrics_port, vr_receiver) });
+    tokio::spawn(crate::metrics::start(metrics_port, vr_receiver));
 
     loop {
         tokio::select! {
@@ -91,10 +91,10 @@ async fn sender(
         let mut vr = storage
             .get::<VerifiedResult>(current_minute.to_be_bytes())
             .unwrap_or_else(|| {
-                let vr = storage
-                    .get::<VerifiedResult>((current_minute - 2).to_be_bytes())
-                    .unwrap();
-                vr_sender.send(vr).unwrap();
+                let res = storage.get::<VerifiedResult>((current_minute - 2).to_be_bytes());
+                if res.is_some() {
+                    vr_sender.send(res.unwrap()).unwrap();
+                }
                 VerifiedResult::new(current_minute)
             });
         if record.status == 1 {
@@ -116,9 +116,9 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
         let tx_hash = unverified_tx.tx_hash;
         let sent_timestamp = unverified_tx.sent_timestamp;
         let mut vr = storage
-            .get::<VerifiedResult>(sent_timestamp.to_be_bytes())
+            .get::<VerifiedResult>(ms_to_minute_scale(sent_timestamp).to_be_bytes())
             .unwrap();
-        if sent_timestamp - unix_now() > 60000 {
+        if unix_now() - sent_timestamp > 60000 {
             // timeout and failed
             storage.remove::<UnverifiedTX>(&tx_hash);
             vr.failed_num += 1;

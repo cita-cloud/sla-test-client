@@ -66,9 +66,9 @@ async fn serve_req(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
             .status(404)
             .body(Body::from(
                 "
-            default:\n
-            /61616/metrics for network\n
-            ",
+                default:\n
+                /61616/metrics for sla-test-client\n
+                ",
             ))
             .unwrap(),
     };

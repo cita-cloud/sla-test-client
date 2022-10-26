@@ -92,8 +92,8 @@ async fn sender(
             .get::<VerifiedResult>(current_minute.to_be_bytes())
             .unwrap_or_else(|| {
                 let res = storage.get::<VerifiedResult>((current_minute - 2).to_be_bytes());
-                if res.is_some() {
-                    vr_sender.send(res.unwrap()).unwrap();
+                if let Some(res) = res {
+                    let _ = vr_sender.send(res);
                 }
                 VerifiedResult::new(current_minute)
             });
@@ -113,11 +113,14 @@ async fn sender(
 async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledStorage) {
     let unverified_txs = storage.all::<UnverifiedTX>();
     for unverified_tx in unverified_txs {
-        let tx_hash = unverified_tx.tx_hash;
-        let sent_timestamp = unverified_tx.sent_timestamp;
+        let UnverifiedTX {
+            tx_hash,
+            sent_timestamp,
+        } = unverified_tx;
+        let current_minute = ms_to_minute_scale(sent_timestamp);
         let mut vr = storage
-            .get::<VerifiedResult>(ms_to_minute_scale(sent_timestamp).to_be_bytes())
-            .unwrap();
+            .get::<VerifiedResult>(current_minute.to_be_bytes())
+            .unwrap_or_else(|| VerifiedResult::new(current_minute));
         if unix_now() - sent_timestamp > 60000 {
             // timeout and failed
             storage.remove::<UnverifiedTX>(&tx_hash);
@@ -125,7 +128,6 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
             continue;
         }
 
-        // TODO
         let mut record = Record {
             timestamp: unix_now(),
             api: "api/get-tx".to_string(),
@@ -157,7 +159,6 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
             vr.success_num += 1;
         }
 
-        // TODO
         storage.insert(format!("{}", &record.timestamp), record);
     }
 }

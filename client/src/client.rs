@@ -17,34 +17,57 @@ use crate::{
     metrics::run_metrics_exporter,
     record::{Record, UnverifiedTX, VerifiedResult},
 };
-use common::time::{ms_to_minute_scale, unix_now};
+use common::{
+    time::{ms_to_minute_scale, unix_now},
+    toml::{calculate_md5, read_toml},
+};
 use log::{debug, error, info, warn};
 use serde_json::{json, Value};
-use std::sync::mpsc::{self, Sender};
+use std::{
+    path::Path,
+    sync::mpsc::{self, Sender},
+};
 use storage::{sledb::SledStorage, Storage};
 
-pub async fn start(config: &Config) {
+pub async fn start(mut config: Config, config_path: impl AsRef<Path> + Clone) {
     let storage = SledStorage::init(&config.storage_path);
     let http_client = reqwest::ClientBuilder::default().build().unwrap();
-    let mut sender_interval =
-        tokio::time::interval(tokio::time::Duration::from_secs(config.sender_interval));
-    let mut checker_interval =
-        tokio::time::interval(tokio::time::Duration::from_secs(config.checker_interval));
 
     let (vr_sender, vr_receiver) = mpsc::channel::<VerifiedResult>();
     let metrics_port = config.metrics_port;
     tokio::spawn(crate::metrics::start(vr_receiver));
     tokio::spawn(run_metrics_exporter(metrics_port));
 
+    let mut config_md5 = calculate_md5(&config_path).unwrap();
+
+    let mut sender_interval =
+        tokio::time::interval(tokio::time::Duration::from_secs(config.sender_interval));
+    let mut checker_interval =
+        tokio::time::interval(tokio::time::Duration::from_secs(config.checker_interval));
+    let mut hot_update_interval =
+        tokio::time::interval(tokio::time::Duration::from_secs(config.hot_update_interval));
+
     loop {
         tokio::select! {
             _ = sender_interval.tick() => {
-                sender(&http_client, config, &storage, &vr_sender).await;
+                sender(&http_client, &config, &storage, &vr_sender).await;
             },
-
             _ = checker_interval.tick() => {
-                checker(&http_client, config, &storage).await;
+                checker(&http_client, &config, &storage).await;
             }
+            _ = hot_update_interval.tick() => {
+                hot_update(&mut config, &mut config_md5, config_path.clone());
+            }
+        }
+    }
+}
+
+fn hot_update(config: &mut Config, config_md5: &mut [u8; 16], config_path: impl AsRef<Path>) {
+    if let Ok(new_md5) = calculate_md5(&config_path) {
+        if new_md5 != *config_md5 {
+            *config_md5 = new_md5;
+            *config = read_toml(config_path).unwrap();
+            info!("config file changed: {:?}", config);
         }
     }
 }
@@ -105,7 +128,7 @@ async fn sender(
         } else {
             vr.sent_failed_num += 1;
         }
-        debug!("insert: {:?}", &vr);
+        info!("sender insert: {:?}", &vr);
         storage.insert(current_minute.to_be_bytes(), vr);
 
         debug!("insert: {:?}", &record);
@@ -130,7 +153,7 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
             storage.remove::<UnverifiedTX>(&tx_hash);
 
             vr.failed_num += 1;
-            info!("insert: {:?}", &vr);
+            info!("checker insert: {:?}", &vr);
             storage.insert(current_minute.to_be_bytes(), vr);
             continue;
         }
@@ -166,7 +189,7 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
             storage.remove::<UnverifiedTX>(&tx_hash);
 
             vr.success_num += 1;
-            info!("insert: {:?}", &vr);
+            info!("checker insert: {:?}", &vr);
             storage.insert(current_minute.to_be_bytes(), vr);
         }
 

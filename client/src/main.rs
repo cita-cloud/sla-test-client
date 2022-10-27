@@ -46,5 +46,5 @@ fn main() {
 
     info!("{:?}", &args);
     info!("{:?}", &config);
-    rt.block_on(client::start(&config));
+    rt.block_on(client::start(config, &args.config));
 }

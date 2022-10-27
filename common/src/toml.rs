@@ -36,3 +36,10 @@ pub fn read_toml<'a, T: Deserialize<'a>>(path: impl AsRef<Path>) -> Option<T> {
         .map_err(|e| println!("config deserialize err: {}", e))
         .ok()
 }
+
+pub fn calculate_md5(path: impl AsRef<Path>) -> Result<[u8; 16], std::io::Error> {
+    match fs::read_to_string(path) {
+        Ok(s) => Ok(*md5::compute(s)),
+        Err(e) => Err(e),
+    }
+}

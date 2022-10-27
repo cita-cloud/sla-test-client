@@ -14,12 +14,13 @@
 
 use crate::{
     config::Config,
-    record::{Record, Resp, UnverifiedTX, VerifiedResult},
+    record::{Record, UnverifiedTX, VerifiedResult},
 };
 use common::time::{ms_to_minute_scale, unix_now};
+use serde_json::{json, Value};
 use std::sync::mpsc::{self, Sender};
 use storage::{sledb::SledStorage, Storage};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 pub async fn start(config: &Config) {
     let storage = SledStorage::init(&config.storage_path);
@@ -57,7 +58,7 @@ async fn sender(
             timestamp: unix_now(),
             api: "api/sendTx".to_string(),
             data: data.to_string(),
-            resp: None,
+            resp: json!(null),
             status: 0,
         };
         match http_client
@@ -67,14 +68,14 @@ async fn sender(
             .send()
             .await
         {
-            Ok(resp) => match resp.json::<Resp>().await {
+            Ok(resp) => match resp.json::<Value>().await {
                 Ok(resp) => {
-                    info!("Post '{}': {:?}", &record.api, resp);
+                    debug!("Post '{}': {:?}", &record.api, resp);
                     record.add_resp(resp.clone());
                     // save UnverifiedTX
-                    if resp.status == 1 {
+                    if resp["status"].as_u64().unwrap() == 1 {
                         let utx = UnverifiedTX {
-                            tx_hash: resp.data.unwrap(),
+                            tx_hash: resp["data"].to_string().replace('\"', ""),
                             sent_timestamp: record.timestamp,
                         };
                         debug!("insert: {:?}", &utx);
@@ -123,8 +124,12 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
             .unwrap_or_else(|| VerifiedResult::new(current_minute));
         if unix_now() - sent_timestamp > 60000 {
             // timeout and failed
+            warn!("Failed: {:?}", &tx_hash);
             storage.remove::<UnverifiedTX>(&tx_hash);
+
             vr.failed_num += 1;
+            info!("insert: {:?}", &vr);
+            storage.insert(current_minute.to_be_bytes(), vr);
             continue;
         }
 
@@ -132,7 +137,7 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
             timestamp: unix_now(),
             api: "api/get-tx".to_string(),
             data: tx_hash.clone(),
-            resp: None,
+            resp: json!(null),
             status: 0,
         };
 
@@ -144,9 +149,9 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
             .send()
             .await
         {
-            Ok(resp) => match resp.json::<Resp>().await {
+            Ok(resp) => match resp.json::<Value>().await {
                 Ok(resp) => {
-                    info!(" Get '{}': {:?}", &record.api, resp);
+                    debug!("Get  '{}': {:?}", &record.api, resp);
                     record.add_resp(resp);
                 }
                 Err(e) => error!("decoding resp from '{}' failed: {}", &record.api, e),
@@ -155,10 +160,15 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
         }
 
         if record.status == 1 {
+            info!("Success: {:?}", &tx_hash);
             storage.remove::<UnverifiedTX>(&tx_hash);
+
             vr.success_num += 1;
+            info!("insert: {:?}", &vr);
+            storage.insert(current_minute.to_be_bytes(), vr);
         }
 
+        debug!("insert: {:?}", &record);
         storage.insert(format!("{}", &record.timestamp), record);
     }
 }

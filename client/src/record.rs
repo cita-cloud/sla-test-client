@@ -13,40 +13,37 @@
 // limitations under the License.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use storage::StorageData;
 use storage_derive::StorageData;
 
-#[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct Resp {
-    pub status: u8,
-    pub data: Option<String>,
-    pub message: String,
-}
-
 #[derive(StorageData, Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Record {
+    /// Units in ms
     pub timestamp: u64,
     pub api: String,
     pub data: String,
-    pub resp: Option<Resp>,
+    pub resp: Value,
     pub status: u8,
 }
 
 impl Record {
-    pub fn add_resp(&mut self, resp: Resp) {
-        self.status = resp.status;
-        self.resp = Some(resp);
+    pub fn add_resp(&mut self, resp: Value) {
+        self.status = resp["status"].as_u64().unwrap() as u8;
+        self.resp = resp;
     }
 }
 
 #[derive(StorageData, Debug, Clone, Default, Deserialize, Serialize)]
 pub struct UnverifiedTX {
     pub tx_hash: String,
+    /// Units in ms
     pub sent_timestamp: u64,
 }
 
 #[derive(StorageData, Debug, Clone, Default, Deserialize, Serialize)]
 pub struct VerifiedResult {
+    /// Units in minutes
     pub timestamp: u64,
     pub sent_num: u8,
     pub sent_failed_num: u8,

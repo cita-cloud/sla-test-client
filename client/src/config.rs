@@ -17,8 +17,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
+    /// Units in second
     pub sender_interval: u64,
+    /// Units in second
     pub checker_interval: u64,
+    /// Units in block
+    pub check_timeout: u32,
+    /// Units in second
+    pub chain_block_interval: u32,
+    /// Units in second
     pub hot_update_interval: u64,
     pub log_file: String,
     pub storage_path: String,
@@ -38,6 +45,8 @@ impl Default for Config {
             cache_url: "http://127.0.0.1:32056".to_string(),
             metrics_port: 61616,
             data_for_send: vec![],
+            check_timeout: 20,
+            chain_block_interval: 3,
         }
     }
 }

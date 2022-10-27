@@ -117,7 +117,17 @@ async fn sender(
         let mut vr = storage
             .get::<VerifiedResult>(current_minute.to_be_bytes())
             .unwrap_or_else(|| {
-                let res = storage.get::<VerifiedResult>((current_minute - 2).to_be_bytes());
+                // Record the result of the first two timeout intervals at the current moment
+                let res = storage.get::<VerifiedResult>(
+                    ms_to_minute_scale(
+                        record.timestamp
+                            - (config.check_timeout as u64
+                                * config.chain_block_interval as u64
+                                * 1000
+                                * 2),
+                    )
+                    .to_be_bytes(),
+                );
                 if let Some(res) = res {
                     let _ = vr_sender.send(res);
                 }
@@ -147,7 +157,9 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
         let mut vr = storage
             .get::<VerifiedResult>(current_minute.to_be_bytes())
             .unwrap_or_else(|| VerifiedResult::new(current_minute));
-        if unix_now() - sent_timestamp > 60000 {
+        if unix_now() - sent_timestamp
+            > (config.check_timeout as u64 * config.chain_block_interval as u64 * 1000)
+        {
             // timeout and failed
             warn!("Failed: {:?}", &tx_hash);
             storage.remove::<UnverifiedTX>(&tx_hash);

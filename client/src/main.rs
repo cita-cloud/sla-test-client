@@ -18,7 +18,7 @@ mod metrics;
 mod record;
 
 use clap::Parser;
-use common::toml::read_toml;
+use common::{signal::handle_signals, toml::read_toml};
 use config::Config;
 use log::info;
 
@@ -32,6 +32,10 @@ pub struct Args {
 
 fn main() {
     ::std::env::set_var("RUST_BACKTRACE", "full");
+
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.spawn(handle_signals());
+
     let args = Args::parse();
     let config: Config = read_toml(&args.config).unwrap_or_default();
 
@@ -42,7 +46,5 @@ fn main() {
 
     info!("{:?}", &args);
     info!("{:?}", &config);
-
-    let rt = tokio::runtime::Runtime::new().unwrap();
     rt.block_on(client::start(&config));
 }

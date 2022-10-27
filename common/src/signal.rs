@@ -12,6 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod signal;
-pub mod time;
-pub mod toml;
+use futures::stream::StreamExt;
+use log::info;
+use signal_hook::{consts::signal::*, low_level::exit};
+use signal_hook_tokio::Signals;
+
+pub async fn handle_signals() {
+    let mut signals = Signals::new(&[SIGTERM]).unwrap();
+    while let Some(signal) = signals.next().await {
+        match signal {
+            SIGTERM => {
+                info!("exit by signal: {signal}");
+                exit(0);
+            }
+            _ => unreachable!(),
+        }
+    }
+}

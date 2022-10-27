@@ -9,6 +9,7 @@ storage = { path = "../storage" }
 
 serde = {version = "1", features = ["derive"]}
 toml = "0.5"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-chrono = "0.4"
+log = "0.4"
+futures = "0.3"
+signal-hook = "0.3"
+signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }

@@ -17,10 +17,10 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Method, Request, Response, Server,
 };
+use log::info;
 use prometheus::{gather, register_histogram, Encoder, TextEncoder};
 use std::convert::Infallible;
 use std::sync::mpsc::Receiver;
-use log::info;
 
 pub async fn start(vr_receiver: Receiver<VerifiedResult>) {
     info!("metrics start observing");

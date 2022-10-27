@@ -30,9 +30,9 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             sender_interval: 30,
-            checker_interval: 5,
+            checker_interval: 10,
             log_file: "config/client-log4rs.yaml".to_string(),
-            storage_path: "test_db".to_string(),
+            storage_path: "default_db".to_string(),
             cache_url: "http://127.0.0.1:32056".to_string(),
             metrics_port: 61616,
             data_for_send: vec![],

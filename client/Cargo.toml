@@ -15,6 +15,6 @@ serde_json = "1.0"
 reqwest = { version = "0.11", features = ["json"] }
 clap = { version = "4.0", features = ["derive"] }
 log = "0.4"
-log4rs = { version = "1.1", features = ["gzip"] }
+log4rs = { version = "1.2", features = ["gzip"] }
 prometheus = "0.13"
 hyper = { version = "0.14", features = ["full"] }

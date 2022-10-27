@@ -33,12 +33,12 @@ pub struct Args {
 fn main() {
     ::std::env::set_var("RUST_BACKTRACE", "full");
     let args = Args::parse();
-    let config: Config = read_toml(&args.config);
+    let config: Config = read_toml(&args.config).unwrap_or_default();
 
     // init log4rs
     log4rs::init_file(&config.log_file, Default::default())
         .map_err(|e| println!("log init err: {}", e))
-        .unwrap();
+        .ok();
 
     info!("{:?}", &args);
     info!("{:?}", &config);

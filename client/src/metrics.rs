@@ -20,17 +20,18 @@ use hyper::{
 use prometheus::{gather, register_histogram, Encoder, TextEncoder};
 use std::convert::Infallible;
 use std::sync::mpsc::Receiver;
+use log::info;
 
-pub async fn start(metrics_port: u16, vr_receiver: Receiver<VerifiedResult>) {
+pub async fn start(vr_receiver: Receiver<VerifiedResult>) {
+    info!("metrics start observing");
     let histogram = register_histogram!("SLA_test", "SLA test", vec![0.5],).unwrap();
-
-    tokio::spawn(run_metrics_exporter(metrics_port));
-
     loop {
         let vr = vr_receiver.recv().unwrap();
         if vr.success_num != vr.sent_num {
+            info!("{} failed", &vr.timestamp);
             histogram.observe(0.0)
         } else {
+            info!("{} succeed", &vr.timestamp);
             histogram.observe(1.0)
         }
     }
@@ -41,9 +42,9 @@ pub async fn run_metrics_exporter(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let make_svc =
         make_service_fn(move |_conn| async move { Ok::<_, Infallible>(service_fn(serve_req)) });
-
     let addr = ([0, 0, 0, 0], port).into();
     let server = Server::bind(&addr).serve(make_svc);
+    info!("export metrics to {}", addr.to_string());
     server.await?;
     Ok(())
 }

@@ -14,6 +14,7 @@
 
 use crate::{
     config::Config,
+    metrics::run_metrics_exporter,
     record::{Record, UnverifiedTX, VerifiedResult},
 };
 use common::time::{ms_to_minute_scale, unix_now};
@@ -32,7 +33,8 @@ pub async fn start(config: &Config) {
 
     let (vr_sender, vr_receiver) = mpsc::channel::<VerifiedResult>();
     let metrics_port = config.metrics_port;
-    tokio::spawn(crate::metrics::start(metrics_port, vr_receiver));
+    tokio::spawn(crate::metrics::start(vr_receiver));
+    tokio::spawn(run_metrics_exporter(metrics_port));
 
     loop {
         tokio::select! {

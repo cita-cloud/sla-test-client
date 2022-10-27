@@ -17,10 +17,10 @@ use crate::{
     record::{Record, UnverifiedTX, VerifiedResult},
 };
 use common::time::{ms_to_minute_scale, unix_now};
+use log::{debug, error, info, warn};
 use serde_json::{json, Value};
 use std::sync::mpsc::{self, Sender};
 use storage::{sledb::SledStorage, Storage};
-use tracing::{debug, error, info, warn};
 
 pub async fn start(config: &Config) {
     let storage = SledStorage::init(&config.storage_path);

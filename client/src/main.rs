@@ -18,9 +18,9 @@ mod metrics;
 mod record;
 
 use clap::Parser;
-use common::{log::set_log, toml::read_toml};
+use common::toml::read_toml;
 use config::Config;
-use tracing::info;
+use log::info;
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
@@ -31,9 +31,14 @@ pub struct Args {
 }
 
 fn main() {
+    ::std::env::set_var("RUST_BACKTRACE", "full");
     let args = Args::parse();
     let config: Config = read_toml(&args.config);
-    set_log(&config.log_filter);
+
+    // init log4rs
+    log4rs::init_file(&config.log_file, Default::default())
+        .map_err(|e| println!("log init err: {}", e))
+        .unwrap();
 
     info!("{:?}", &args);
     info!("{:?}", &config);

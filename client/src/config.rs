@@ -19,7 +19,7 @@ use serde::{Deserialize, Serialize};
 pub struct Config {
     pub sender_interval: u64,
     pub checker_interval: u64,
-    pub log_filter: String,
+    pub log_file: String,
     pub storage_path: String,
     pub cache_url: String,
     pub metrics_port: u16,
@@ -31,7 +31,7 @@ impl Default for Config {
         Self {
             sender_interval: 30,
             checker_interval: 5,
-            log_filter: "info".to_string(),
+            log_file: "config/client-log4rs.yaml".to_string(),
             storage_path: "test_db".to_string(),
             cache_url: "http://127.0.0.1:32056".to_string(),
             metrics_port: 61616,

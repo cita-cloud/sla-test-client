@@ -18,21 +18,26 @@ use hyper::{
     Body, Method, Request, Response, Server,
 };
 use log::info;
-use prometheus::{gather, register_histogram, Encoder, TextEncoder};
+use prometheus::{gather, register_int_counter, Encoder, TextEncoder};
 use std::convert::Infallible;
 use std::sync::mpsc::Receiver;
 
 pub async fn start(vr_receiver: Receiver<VerifiedResult>) {
     info!("metrics start observing");
-    let histogram = register_histogram!("SLA_test", "SLA test", vec![0.5],).unwrap();
+    let unavailable_counter =
+        register_int_counter!("Unavailable_Counter", "SLA test unavailable counter(min)").unwrap();
+    let observed_counter =
+        register_int_counter!("Observed_Counter", "SLA test total observed counter(min)").unwrap();
+    // TODO: recover data from storage
     loop {
-        let vr = vr_receiver.recv().unwrap();
-        if vr.success_num != vr.sent_num {
-            info!("{} failed", &vr.timestamp);
-            histogram.observe(0.0)
-        } else {
-            info!("{} succeed", &vr.timestamp);
-            histogram.observe(1.0)
+        if let Ok(vr) = vr_receiver.recv() {
+            observed_counter.inc();
+            if vr.failed_num != 0 {
+                info!("{} unavailable", &vr.timestamp);
+                unavailable_counter.inc()
+            } else {
+                info!("{} available", &vr.timestamp);
+            }
         }
     }
 }

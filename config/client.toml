@@ -2,11 +2,14 @@ sender_interval = 30
 checker_interval = 10
 storage_path = "record_db"
 cache_url = "http://192.168.10.120:32667"
+# Be consistent with data_for_send.block_count
+check_timeout = 20
 data_for_send = [
     """{
-    "data": "",
-    "quota": 20000,
-    "to": "0xdc64666ff929994e5ee1131381d1d3f8693d3dab",
-    "value": "0x1"
+    "block_count": 20,
+    "data": "0x4f2be91f",
+    "quota": 30000,
+    "to": "0xedf40060586015710aad88b7202b92eac418e660",
+    "value": "0x0"
     }""",
 ]

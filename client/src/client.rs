@@ -18,7 +18,7 @@ use crate::{
     record::{Record, UnverifiedTX, VerifiedResult},
 };
 use common::{
-    time::{ms_to_minute_scale, unix_now},
+    time::{get_latest_finalized_minute, ms_to_minute_scale, unix_now},
     toml::{calculate_md5, read_toml},
 };
 use log::{debug, error, info, warn};
@@ -35,7 +35,12 @@ pub async fn start(mut config: Config, config_path: impl AsRef<Path> + Clone) {
 
     let (vr_sender, vr_receiver) = mpsc::channel::<VerifiedResult>();
     let metrics_port = config.metrics_port;
-    tokio::spawn(crate::metrics::start(vr_receiver));
+    tokio::spawn(crate::metrics::start(
+        vr_receiver,
+        storage.clone(),
+        config.check_timeout,
+        config.chain_block_interval,
+    ));
     tokio::spawn(run_metrics_exporter(metrics_port));
 
     let mut config_md5 = calculate_md5(&config_path).unwrap();
@@ -119,13 +124,12 @@ async fn sender(
             .unwrap_or_else(|| {
                 // Record the result of the first two timeout intervals at the current moment
                 let res = storage.get::<VerifiedResult>(
-                    (ms_to_minute_scale(
-                        record.timestamp
-                            - (config.check_timeout as u64
-                                * config.chain_block_interval as u64
-                                * 1000),
-                    ) - 1)
-                        .to_be_bytes(),
+                    get_latest_finalized_minute(
+                        record.timestamp,
+                        config.check_timeout,
+                        config.chain_block_interval,
+                    )
+                    .to_be_bytes(),
                 );
                 if let Some(res) = res {
                     let _ = vr_sender.send(res);

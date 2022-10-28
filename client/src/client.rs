@@ -119,14 +119,13 @@ async fn sender(
             .unwrap_or_else(|| {
                 // Record the result of the first two timeout intervals at the current moment
                 let res = storage.get::<VerifiedResult>(
-                    ms_to_minute_scale(
+                    (ms_to_minute_scale(
                         record.timestamp
                             - (config.check_timeout as u64
                                 * config.chain_block_interval as u64
-                                * 1000
-                                * 2),
-                    )
-                    .to_be_bytes(),
+                                * 1000),
+                    ) - 1)
+                        .to_be_bytes(),
                 );
                 if let Some(res) = res {
                     let _ = vr_sender.send(res);

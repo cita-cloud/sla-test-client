@@ -12,23 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use crate::record::VerifiedResult;
+use common::time::{get_latest_finalized_minute, unix_now};
 use hyper::{
     header::CONTENT_TYPE,
     service::{make_service_fn, service_fn},
     Body, Method, Request, Response, Server,
 };
 use log::info;
-use prometheus::{gather, register_int_counter, Encoder, TextEncoder};
+use prometheus::{
+    core::{AtomicU64, GenericCounter},
+    gather, register_int_counter, Encoder, TextEncoder,
+};
 use std::convert::Infallible;
 use std::sync::mpsc::Receiver;
+use storage::{sledb::SledStorage, Storage};
 
-pub async fn start(vr_receiver: Receiver<VerifiedResult>) {
+pub async fn start(
+    vr_receiver: Receiver<VerifiedResult>,
+    storage: SledStorage,
+    check_timeout: u32,
+    chain_block_interval: u32,
+) {
     info!("metrics start observing");
     let unavailable_counter =
         register_int_counter!("Unavailable_Counter", "SLA test unavailable counter(min)").unwrap();
     let observed_counter =
         register_int_counter!("Observed_Counter", "SLA test total observed counter(min)").unwrap();
-    // TODO: recover data from storage
+    recover_data(
+        &unavailable_counter,
+        &observed_counter,
+        storage,
+        check_timeout,
+        chain_block_interval,
+    );
     loop {
         if let Ok(vr) = vr_receiver.recv() {
             observed_counter.inc();
@@ -40,6 +56,35 @@ pub async fn start(vr_receiver: Receiver<VerifiedResult>) {
             }
         }
     }
+}
+
+fn recover_data(
+    unavailable_counter: &GenericCounter<AtomicU64>,
+    observed_counter: &GenericCounter<AtomicU64>,
+    storage: SledStorage,
+    check_timeout: u32,
+    chain_block_interval: u32,
+) {
+    let finalized_minute =
+        get_latest_finalized_minute(unix_now(), check_timeout, chain_block_interval);
+    let (unavailable, observed) = storage.all::<VerifiedResult>().iter().fold(
+        (0, 0),
+        |(mut unavailable, mut observed), vr| {
+            if vr.timestamp <= finalized_minute {
+                observed += 1;
+                if vr.failed_num != 0 {
+                    unavailable += 1;
+                }
+            }
+            (unavailable, observed)
+        },
+    );
+    unavailable_counter.inc_by(unavailable);
+    observed_counter.inc_by(observed);
+    info!(
+        "recover metrics data before minute: {}, unavailable: {}, observed: {}",
+        finalized_minute, unavailable, observed
+    );
 }
 
 pub async fn run_metrics_exporter(

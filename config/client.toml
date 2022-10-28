@@ -1,7 +1,7 @@
 sender_interval = 30
 checker_interval = 10
 storage_path = "record_db"
-cache_url = "http://192.168.10.120:32667"
+cache_url = "http://${CHAIN_NAME}-cache:8000"
 # Be consistent with data_for_send.block_count
 check_timeout = 20
 data_for_send = [

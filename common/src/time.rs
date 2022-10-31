@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::prelude::*;
+
 pub fn unix_now() -> u64 {
     let d = ::std::time::UNIX_EPOCH.elapsed().unwrap();
     d.as_secs() * 1_000 + u64::from(d.subsec_millis())
@@ -27,4 +29,18 @@ pub fn get_latest_finalized_minute(
     chain_block_interval: u32,
 ) -> u64 {
     ms_to_minute_scale(time - (check_timeout as u64 * chain_block_interval as u64 * 1000)) - 1
+}
+
+pub fn get_readable_time_from_millisecond(timestamp: u64) -> String {
+    Utc.timestamp((timestamp / 1000) as i64, 0)
+        .with_timezone(&FixedOffset::east(8 * 3600))
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string()
+}
+
+pub fn get_readable_time_from_minute(timestamp: u64) -> String {
+    Utc.timestamp((timestamp * 60) as i64, 0)
+        .with_timezone(&FixedOffset::east(8 * 3600))
+        .format("%Y-%m-%d %H:%M")
+        .to_string()
 }

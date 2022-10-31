@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use crate::record::VerifiedResult;
-use common::time::{get_latest_finalized_minute, unix_now};
+use common::time::{get_latest_finalized_minute, get_readable_time_from_minute, unix_now};
 use hyper::{
     header::CONTENT_TYPE,
     service::{make_service_fn, service_fn},
@@ -49,10 +49,18 @@ pub async fn start(
         if let Ok(vr) = vr_receiver.recv() {
             observed_counter.inc();
             if vr.failed_num != 0 {
-                info!("{} unavailable", &vr.timestamp);
+                info!(
+                    "{} unavailable, VerifiedResult key: {}",
+                    get_readable_time_from_minute(vr.timestamp),
+                    vr.timestamp
+                );
                 unavailable_counter.inc()
             } else {
-                info!("{} available", &vr.timestamp);
+                info!(
+                    "{} available, VerifiedResult key: {}",
+                    get_readable_time_from_minute(vr.timestamp),
+                    vr.timestamp
+                );
             }
         }
     }
@@ -82,8 +90,10 @@ fn recover_data(
     unavailable_counter.inc_by(unavailable);
     observed_counter.inc_by(observed);
     info!(
-        "recover metrics data before minute: {}, unavailable: {}, observed: {}",
-        finalized_minute, unavailable, observed
+        "recover metrics data before: {}, unavailable: {}, observed: {}",
+        get_readable_time_from_minute(finalized_minute),
+        unavailable,
+        observed
     );
 }
 

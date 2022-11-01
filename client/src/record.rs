@@ -48,7 +48,7 @@ pub struct VerifiedResult {
     pub sent_num: u8,
     pub sent_failed_num: u8,
     pub failed_num: u8,
-    pub success_num: u8,
+    pub succeed_num: u8,
 }
 
 impl VerifiedResult {
@@ -58,7 +58,7 @@ impl VerifiedResult {
             sent_num: 0,
             sent_failed_num: 0,
             failed_num: 0,
-            success_num: 0,
+            succeed_num: 0,
         }
     }
 }

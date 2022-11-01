@@ -203,7 +203,7 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
             info!("Success: {:?}", &tx_hash);
             storage.remove::<UnverifiedTX>(&tx_hash);
 
-            vr.success_num += 1;
+            vr.succeed_num += 1;
             info!("checker insert: {:?}", &vr);
             storage.insert(current_minute.to_be_bytes(), vr);
         }

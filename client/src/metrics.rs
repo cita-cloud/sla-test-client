@@ -34,11 +34,14 @@ pub async fn start(
     chain_block_interval: u32,
 ) {
     info!("metrics start observing");
+    let sent_failed_counter =
+        register_int_counter!("Sent_failed_Counter", "SLA test sent failed counter(time)").unwrap();
     let unavailable_counter =
         register_int_counter!("Unavailable_Counter", "SLA test unavailable counter(min)").unwrap();
     let observed_counter =
         register_int_counter!("Observed_Counter", "SLA test total observed counter(min)").unwrap();
     recover_data(
+        &sent_failed_counter,
         &unavailable_counter,
         &observed_counter,
         storage,
@@ -48,6 +51,7 @@ pub async fn start(
     loop {
         if let Ok(vr) = vr_receiver.recv() {
             observed_counter.inc();
+            sent_failed_counter.inc_by(vr.sent_failed_num.into());
             if vr.failed_num != 0 {
                 info!(
                     "{} unavailable, VerifiedResult key: {}",
@@ -67,6 +71,7 @@ pub async fn start(
 }
 
 fn recover_data(
+    sent_failed_counter: &GenericCounter<AtomicU64>,
     unavailable_counter: &GenericCounter<AtomicU64>,
     observed_counter: &GenericCounter<AtomicU64>,
     storage: SledStorage,
@@ -75,23 +80,26 @@ fn recover_data(
 ) {
     let finalized_minute =
         get_latest_finalized_minute(unix_now(), check_timeout, chain_block_interval);
-    let (unavailable, observed) = storage.all::<VerifiedResult>().iter().fold(
-        (0, 0),
-        |(mut unavailable, mut observed), vr| {
+    let (sent_failed, unavailable, observed) = storage.all::<VerifiedResult>().iter().fold(
+        (0, 0, 0),
+        |(mut sent_failed, mut unavailable, mut observed), vr| {
             if vr.timestamp <= finalized_minute {
                 observed += 1;
+                sent_failed += vr.sent_failed_num as u64;
                 if vr.failed_num != 0 {
                     unavailable += 1;
                 }
             }
-            (unavailable, observed)
+            (sent_failed, unavailable, observed)
         },
     );
+    sent_failed_counter.inc_by(sent_failed);
     unavailable_counter.inc_by(unavailable);
     observed_counter.inc_by(observed);
     info!(
-        "recover metrics data before: {}, unavailable: {}, observed: {}",
+        "recover metrics data before: {}, sent_failed: {}, unavailable: {}, observed: {}",
         get_readable_time_from_minute(finalized_minute),
+        sent_failed,
         unavailable,
         observed
     );

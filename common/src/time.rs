@@ -32,15 +32,17 @@ pub fn get_latest_finalized_minute(
 }
 
 pub fn get_readable_time_from_millisecond(timestamp: u64) -> String {
-    Utc.timestamp((timestamp / 1000) as i64, 0)
-        .with_timezone(&FixedOffset::east(8 * 3600))
+    Utc.timestamp_opt((timestamp / 1000) as i64, 0)
+        .unwrap()
+        .with_timezone(&FixedOffset::east_opt(8 * 3600).unwrap())
         .format("%Y-%m-%d %H:%M:%S")
         .to_string()
 }
 
 pub fn get_readable_time_from_minute(timestamp: u64) -> String {
-    Utc.timestamp((timestamp * 60) as i64, 0)
-        .with_timezone(&FixedOffset::east(8 * 3600))
+    Utc.timestamp_opt((timestamp * 60) as i64, 0)
+        .unwrap()
+        .with_timezone(&FixedOffset::east_opt(8 * 3600).unwrap())
         .format("%Y-%m-%d %H:%M")
         .to_string()
 }

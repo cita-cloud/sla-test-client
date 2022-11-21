@@ -120,6 +120,18 @@ impl SledStorage {
             sledb: sled::open(path).unwrap(),
         }
     }
+
+    pub fn range<T: for<'a> Deserialize<'a> + StorageData>(
+        &self,
+        start: impl AsRef<[u8]>,
+        end: impl AsRef<[u8]>,
+    ) -> Vec<T> {
+        let tree = self.sledb.open_tree(&T::name()).unwrap();
+        tree.range(start.as_ref()..end.as_ref())
+            .values()
+            .map(|v| bincode::deserialize::<T>(&v.unwrap()).unwrap())
+            .collect::<Vec<T>>()
+    }
 }
 
 #[test]

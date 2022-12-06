@@ -33,6 +33,7 @@ pub async fn start(
     check_timeout: u32,
     chain_block_interval: u32,
 ) {
+    // sent_failed < unavailable < observed
     info!("metrics start observing");
     let sent_failed_counter =
         register_int_counter!("Sent_failed_Counter", "SLA test sent failed counter(time)").unwrap();
@@ -51,8 +52,15 @@ pub async fn start(
     loop {
         if let Ok(vr) = vr_receiver.recv() {
             observed_counter.inc();
-            sent_failed_counter.inc_by(vr.sent_failed_num.into());
-            if vr.failed_num != 0 {
+            if vr.sent_failed_num != 0 {
+                info!(
+                    "{} sent_failed, VerifiedResult key: {}",
+                    get_readable_time_from_minute(vr.timestamp),
+                    vr.timestamp
+                );
+                sent_failed_counter.inc();
+                unavailable_counter.inc()
+            } else if vr.failed_num != 0 {
                 info!(
                     "{} unavailable, VerifiedResult key: {}",
                     get_readable_time_from_minute(vr.timestamp),
@@ -85,10 +93,12 @@ fn recover_data(
         |(mut sent_failed, mut unavailable, mut observed), vr| {
             if vr.timestamp <= finalized_minute {
                 observed += 1;
-                sent_failed += vr.sent_failed_num as u64;
-                if vr.failed_num != 0 {
+                if vr.sent_failed_num != 0 || vr.failed_num != 0 {
                     unavailable += 1;
-                }
+                    if vr.sent_failed_num != 0 {
+                        sent_failed += 1;
+                    }
+                };
             }
             (sent_failed, unavailable, observed)
         },

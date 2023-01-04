@@ -109,7 +109,7 @@ async fn sender(
                             sent_timestamp: record.timestamp,
                         };
                         debug!("insert: {:?}", &utx);
-                        storage.insert(&utx.tx_hash.clone(), utx);
+                        storage.insert(utx.tx_hash.clone(), utx);
                     }
                 }
                 Err(e) => error!("decoding resp from '{}' failed: {}", &record.api, e),
@@ -138,10 +138,11 @@ async fn sender(
             });
         if record.status == 1 {
             vr.sent_num += 1;
+            info!("sender insert: {:?}", &vr);
         } else {
             vr.sent_failed_num += 1;
+            warn!("sender insert: {:?}", &vr);
         }
-        info!("sender insert: {:?}", &vr);
         storage.insert(current_minute.to_be_bytes(), vr);
 
         debug!("insert: {:?}", &record);
@@ -168,7 +169,7 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
             storage.remove::<UnverifiedTX>(&tx_hash);
 
             vr.failed_num += 1;
-            info!("checker insert: {:?}", &vr);
+            warn!("checker insert: {:?}", &vr);
             storage.insert(current_minute.to_be_bytes(), vr);
             continue;
         }

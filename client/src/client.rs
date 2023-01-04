@@ -176,7 +176,7 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
 
         let mut record = Record {
             timestamp: unix_now(),
-            api: "api/get-tx".to_string(),
+            api: "api/get-receipt".to_string(),
             data: tx_hash.clone(),
             resp: json!(null),
             status: 0,

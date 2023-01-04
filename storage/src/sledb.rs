@@ -25,7 +25,7 @@ pub struct SledStorage {
 
 impl Storage for SledStorage {
     fn get<T: for<'a> Deserialize<'a> + StorageData>(&self, key: impl AsRef<[u8]>) -> Option<T> {
-        let tree = self.sledb.open_tree(&T::name()).unwrap();
+        let tree = self.sledb.open_tree(T::name()).unwrap();
         if let Ok(Some(v)) = tree.get(key.as_ref()) {
             let value = bincode::deserialize::<T>(&v);
             if let Ok(value) = value {
@@ -36,7 +36,7 @@ impl Storage for SledStorage {
     }
 
     fn all<T: for<'a> Deserialize<'a> + StorageData>(&self) -> Vec<T> {
-        let tree = self.sledb.open_tree(&T::name()).unwrap();
+        let tree = self.sledb.open_tree(T::name()).unwrap();
         tree.iter()
             .values()
             .map(|v| bincode::deserialize::<T>(&v.unwrap()).unwrap())
@@ -44,7 +44,7 @@ impl Storage for SledStorage {
     }
 
     fn insert<T: Serialize + StorageData>(&self, key: impl AsRef<[u8]>, value: T) -> Option<T> {
-        let tree = self.sledb.open_tree(&T::name()).unwrap();
+        let tree = self.sledb.open_tree(T::name()).unwrap();
         if tree
             .insert(key, bincode::serialize(&value).unwrap())
             .is_ok()
@@ -55,7 +55,7 @@ impl Storage for SledStorage {
     }
 
     fn remove<T: Serialize + StorageData>(&self, key: impl AsRef<[u8]>) -> bool {
-        let tree = self.sledb.open_tree(&T::name()).unwrap();
+        let tree = self.sledb.open_tree(T::name()).unwrap();
         tree.remove(key).is_ok()
     }
 
@@ -126,7 +126,7 @@ impl SledStorage {
         start: impl AsRef<[u8]>,
         end: impl AsRef<[u8]>,
     ) -> Vec<T> {
-        let tree = self.sledb.open_tree(&T::name()).unwrap();
+        let tree = self.sledb.open_tree(T::name()).unwrap();
         tree.range(start.as_ref()..end.as_ref())
             .values()
             .map(|v| bincode::deserialize::<T>(&v.unwrap()).unwrap())

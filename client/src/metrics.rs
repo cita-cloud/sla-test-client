@@ -18,7 +18,7 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Body, Method, Request, Response, Server,
 };
-use log::info;
+use log::{info, warn};
 use prometheus::{
     core::{AtomicU64, GenericCounter},
     gather, register_int_counter, Encoder, TextEncoder,
@@ -53,7 +53,7 @@ pub async fn start(
         if let Ok(vr) = vr_receiver.recv() {
             observed_counter.inc();
             if vr.sent_failed_num != 0 {
-                info!(
+                warn!(
                     "{} sent_failed, VerifiedResult key: {}",
                     get_readable_time_from_minute(vr.timestamp),
                     vr.timestamp
@@ -61,7 +61,7 @@ pub async fn start(
                 sent_failed_counter.inc();
                 unavailable_counter.inc()
             } else if vr.failed_num != 0 {
-                info!(
+                warn!(
                     "{} unavailable, VerifiedResult key: {}",
                     get_readable_time_from_minute(vr.timestamp),
                     vr.timestamp

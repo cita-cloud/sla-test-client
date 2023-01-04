@@ -100,7 +100,7 @@ async fn sender(
         {
             Ok(resp) => match resp.json::<Value>().await {
                 Ok(resp) => {
-                    debug!("Post '{}': {:?}", &record.api, resp);
+                    info!("Post '{}': {:?}", &record.api, resp);
                     record.add_resp(resp.clone());
                     // save UnverifiedTX
                     if resp["status"].as_u64().unwrap() == 1 {
@@ -192,7 +192,7 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
         {
             Ok(resp) => match resp.json::<Value>().await {
                 Ok(resp) => {
-                    debug!("Get  '{}': {:?}", &record.api, resp);
+                    info!("Get  '{}': {:?}", &record.api, resp);
                     record.add_resp(resp);
                 }
                 Err(e) => error!("decoding resp from '{}' failed: {}", &record.api, e),

@@ -192,7 +192,7 @@ async fn checker(http_client: &reqwest::Client, config: &Config, storage: &SledS
         {
             Ok(resp) => match resp.json::<Value>().await {
                 Ok(resp) => {
-                    info!("Get  '{}': {:?}", &record.api, resp);
+                    info!("Get  '{}/{}': {:?}", &record.api, &record.data, resp);
                     record.add_resp(resp);
                 }
                 Err(e) => error!("decoding resp from '{}' failed: {}", &record.api, e),

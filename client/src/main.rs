@@ -41,7 +41,7 @@ fn main() {
 
     // init log4rs
     log4rs::init_file(&config.log_file, Default::default())
-        .map_err(|e| println!("log init err: {}", e))
+        .map_err(|e| println!("log init err: {e}"))
         .ok();
 
     info!("{:?}", &args);

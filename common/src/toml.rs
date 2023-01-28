@@ -21,19 +21,19 @@ pub fn read_toml<'a, T: Deserialize<'a>>(path: impl AsRef<Path>) -> Option<T> {
     let s = match fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
-            println!("read_to_string err: {}", e);
+            println!("read_to_string err: {e}");
             return None;
         }
     };
     let config: Value = match s.parse() {
         Ok(config) => config,
         Err(e) => {
-            println!("read_to_string err: {}", e);
+            println!("read_to_string err: {e}");
             return None;
         }
     };
     T::deserialize(config)
-        .map_err(|e| println!("config deserialize err: {}", e))
+        .map_err(|e| println!("config deserialize err: {e}"))
         .ok()
 }
 

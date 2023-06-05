@@ -20,9 +20,9 @@ pub struct Config {
     /// Units in second
     pub sender_interval: u64,
     /// Units in second
-    pub checker_interval: u64,
+    pub validator_interval: u64,
     /// Units in block
-    pub check_timeout: u32,
+    pub validator_timeout: u32,
     /// Units in second
     pub chain_block_interval: u32,
     /// Units in second
@@ -38,14 +38,14 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             sender_interval: 30,
-            checker_interval: 10,
+            validator_interval: 10,
             hot_update_interval: 5,
             log_file: "config/client-log4rs.yaml".to_string(),
             storage_path: "default_db".to_string(),
             cache_url: "http://127.0.0.1:32056".to_string(),
             metrics_port: 61616,
             data_for_send: vec![],
-            check_timeout: 20,
+            validator_timeout: 20,
             chain_block_interval: 3,
         }
     }

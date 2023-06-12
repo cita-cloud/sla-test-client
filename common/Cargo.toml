@@ -8,8 +8,7 @@ edition = "2021"
 storage = { path = "../storage" }
 
 serde = {version = "1", features = ["derive"]}
-toml = "0.5"
-log = "0.4"
+toml = "0.7"
 futures = "0.3"
 signal-hook = "0.3"
 signal-hook-tokio = { version = "0.3", features = ["futures-v0_3"] }

@@ -17,13 +17,18 @@ mod config;
 mod metrics;
 mod record;
 
+#[macro_use]
+extern crate tracing as logger;
+
 use clap::Parser;
-use log::info;
+use cloud_util::panic_hook::set_panic_handler;
 use std::{path::Path, sync::mpsc};
+
+use cloud_util::signal::handle_signals;
 
 use client::Client;
 use common::toml::calculate_md5;
-use common::{signal::handle_signals, toml::read_toml};
+use common::toml::read_toml;
 use config::Config;
 use metrics::run_metrics_exporter;
 use record::VerifiedResult;
@@ -39,6 +44,7 @@ pub struct Args {
 
 fn main() {
     ::std::env::set_var("RUST_BACKTRACE", "full");
+    set_panic_handler();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.spawn(handle_signals());
@@ -46,10 +52,10 @@ fn main() {
     let args = Args::parse();
     let config: Config = read_toml(&args.config).unwrap_or_default();
 
-    // init log4rs
-    log4rs::init_file(&config.log_file, Default::default())
-        .map_err(|e| println!("log init err: {e}"))
-        .ok();
+    // init tracer
+    cloud_util::tracer::init_tracer("sla-client".to_owned(), &config.log_config)
+        .map_err(|e| println!("tracer init err: {e}"))
+        .unwrap();
 
     info!("{:?}", &args);
     info!("{:?}", &config);

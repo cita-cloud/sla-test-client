@@ -1,4 +1,4 @@
-sender_interval = 30
+sender_interval = 1
 checker_interval = 10
 storage_path = "record_db"
 cache_url = "http://${CHAIN_NAME}-cache:8000"

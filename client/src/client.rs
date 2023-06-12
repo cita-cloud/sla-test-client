@@ -20,7 +20,6 @@ use common::{
     time::{get_latest_finalized_minute, ms_to_minute_scale, unix_now},
     toml::{calculate_md5, read_toml},
 };
-use log::{debug, error, info, warn};
 use serde_json::{json, Value};
 use std::{path::Path, sync::mpsc::Sender};
 use storage::{sledb::SledStorage, Storage};

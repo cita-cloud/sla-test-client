@@ -15,35 +15,24 @@
 use crate::{
     config::Config,
     record::{Record, UnverifiedTX, VerifiedResult},
-};
-use common::{
     time::{get_latest_finalized_minute, ms_to_minute_scale, unix_now},
-    toml::{calculate_md5, read_toml},
 };
+use parking_lot::RwLock;
 use serde_json::{json, Value};
-use std::{path::Path, sync::mpsc::Sender};
-use storage::{sledb::SledStorage, Storage};
+use std::sync::{mpsc::Sender, Arc};
+use storage_dal::Storage;
 
 pub(crate) struct Client {
-    pub config: Config,
-    pub storage: SledStorage,
+    pub config: Arc<RwLock<Config>>,
+    pub storage: Storage,
     pub http_client: reqwest::Client,
     pub vr_sender: Sender<VerifiedResult>,
 }
 
 impl Client {
-    pub fn hot_update(&mut self, config_md5: &mut [u8; 16], config_path: impl AsRef<Path>) {
-        if let Ok(new_md5) = calculate_md5(&config_path) {
-            if new_md5 != *config_md5 {
-                *config_md5 = new_md5;
-                self.config = read_toml(config_path).unwrap();
-                info!("config file changed: {:?}", self.config);
-            }
-        }
-    }
-
     pub async fn sender(&self) {
-        for data in &self.config.data_for_send {
+        let config = self.config.read().clone();
+        for data in config.data_for_send {
             let mut record = Record {
                 timestamp: unix_now(),
                 api: "api/sendTx".to_string(),
@@ -53,7 +42,7 @@ impl Client {
             };
             match self
                 .http_client
-                .post(format!("{}/{}", self.config.cache_url, &record.api))
+                .post(format!("{}/{}", config.cache_url, &record.api))
                 .header("Content-Type", "application/json")
                 .body(record.data.clone())
                 .send()
@@ -70,7 +59,7 @@ impl Client {
                                 sent_timestamp: record.timestamp,
                             };
                             debug!("insert: {:?}", &utx);
-                            self.storage.insert(utx.tx_hash.clone(), utx);
+                            self.storage.insert(&utx.tx_hash.clone(), utx);
                         }
                     }
                     Err(e) => error!("decoding resp from '{}' failed: {}", &record.api, e),
@@ -82,16 +71,16 @@ impl Client {
             let current_minute = ms_to_minute_scale(record.timestamp);
             let mut vr = self
                 .storage
-                .get::<VerifiedResult>(current_minute.to_be_bytes())
+                .get::<VerifiedResult>(&current_minute.to_string())
                 .unwrap_or_else(|| {
                     // Record the result of the first two timeout intervals at the current moment
                     let res = self.storage.get::<VerifiedResult>(
-                        get_latest_finalized_minute(
+                        &get_latest_finalized_minute(
                             record.timestamp,
-                            self.config.validator_timeout,
-                            self.config.chain_block_interval,
+                            config.validator_timeout,
+                            config.chain_block_interval,
                         )
-                        .to_be_bytes(),
+                        .to_string(),
                     );
                     if let Some(res) = res {
                         let _ = self.vr_sender.send(res);
@@ -105,29 +94,31 @@ impl Client {
                 vr.sent_failed_num += 1;
                 warn!("sender insert: {:?}", &vr);
             }
-            self.storage.insert(current_minute.to_be_bytes(), vr);
+            self.storage.insert(&current_minute.to_string(), vr);
 
             debug!("insert: {:?}", &record);
-            self.storage.insert(record.timestamp.to_be_bytes(), record);
+            self.storage.insert(&current_minute.to_string(), record);
         }
     }
 
     pub async fn validator(&self) {
-        let unverified_txs = self.storage.all::<UnverifiedTX>();
+        let unverified_txs = self.storage.scan::<UnverifiedTX>();
+        let config = self.config.read().clone();
         for unverified_tx in unverified_txs {
             let UnverifiedTX {
                 tx_hash,
                 sent_timestamp,
-            } = unverified_tx;
+            } = self
+                .storage
+                .get_by_path(unverified_tx.unwrap().path())
+                .unwrap();
             let current_minute = ms_to_minute_scale(sent_timestamp);
             let mut vr = self
                 .storage
-                .get::<VerifiedResult>(current_minute.to_be_bytes())
+                .get::<VerifiedResult>(&current_minute.to_string())
                 .unwrap_or_else(|| VerifiedResult::new(current_minute));
             if unix_now() - sent_timestamp
-                > (self.config.validator_timeout as u64
-                    * self.config.chain_block_interval as u64
-                    * 1000)
+                > (config.validator_timeout as u64 * config.chain_block_interval as u64 * 1000)
             {
                 // timeout and failed
                 warn!("Failed: {:?}", &tx_hash);
@@ -135,7 +126,7 @@ impl Client {
 
                 vr.failed_num += 1;
                 warn!("validator insert: {:?}", &vr);
-                self.storage.insert(current_minute.to_be_bytes(), vr);
+                self.storage.insert(&current_minute.to_string(), vr);
                 continue;
             }
 
@@ -161,7 +152,9 @@ impl Client {
             .http_client
             .get(format!(
                 "{}/{}/{}",
-                self.config.cache_url, &record.api, &record.data
+                self.config.read().cache_url,
+                &record.api,
+                &record.data
             ))
             .send()
             .await
@@ -182,11 +175,11 @@ impl Client {
 
             vr.succeed_num += 1;
             info!("validator insert: {:?}", &vr);
-            self.storage.insert(current_minute.to_be_bytes(), vr);
+            self.storage.insert(&current_minute.to_string(), vr);
         }
 
         debug!("insert: {:?}", &record);
         self.storage
-            .insert(format!("{}", &record.timestamp), record);
+            .insert(&format!("{}", &record.timestamp), record);
     }
 }

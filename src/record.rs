@@ -14,8 +14,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use storage::StorageData;
-use storage_derive::StorageData;
+use storage_dal::StorageData;
 
 #[derive(StorageData, Debug, Clone, Default, Deserialize, Serialize)]
 pub struct Record {
@@ -52,7 +51,7 @@ pub struct VerifiedResult {
 }
 
 impl VerifiedResult {
-    pub fn new(timestamp: u64) -> Self {
+    pub const fn new(timestamp: u64) -> Self {
         Self {
             timestamp,
             sent_num: 0,

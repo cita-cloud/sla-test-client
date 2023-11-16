@@ -12,27 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![forbid(unsafe_code)]
+#![warn(
+    missing_copy_implementations,
+    missing_debug_implementations,
+    unused_crate_dependencies,
+    clippy::missing_const_for_fn,
+    unused_extern_crates
+)]
+
 mod client;
 mod config;
 mod metrics;
 mod record;
+mod time;
 
 #[macro_use]
 extern crate tracing as logger;
 
+use anyhow::{Ok, Result};
 use clap::Parser;
-use cloud_util::panic_hook::set_panic_handler;
-use std::{path::Path, sync::mpsc};
-
-use cloud_util::signal::handle_signals;
+use cloud_util::graceful_shutdown::graceful_shutdown;
+use common_rs::configure::{file_config, hot_reload};
+use parking_lot::RwLock;
+use std::sync::{mpsc, Arc};
+use storage_dal::Storage;
 
 use client::Client;
-use common::toml::calculate_md5;
-use common::toml::read_toml;
 use config::Config;
 use metrics::run_metrics_exporter;
 use record::VerifiedResult;
-use storage::sledb::SledStorage;
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
@@ -44,13 +53,11 @@ pub struct Args {
 
 fn main() {
     ::std::env::set_var("RUST_BACKTRACE", "full");
-    set_panic_handler();
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.spawn(handle_signals());
 
     let args = Args::parse();
-    let config: Config = read_toml(&args.config).unwrap_or_default();
+    let config: Config = file_config(&args.config).unwrap_or_default();
 
     // init tracer
     cloud_util::tracer::init_tracer("sla-client".to_owned(), &config.log_config)
@@ -59,42 +66,43 @@ fn main() {
 
     info!("{:?}", &args);
     info!("{:?}", &config);
-    rt.block_on(start(config, &args.config));
+    if let Err(err) = rt.block_on(start(config, args.config)) {
+        error!("sla-client start err: {:?}", err);
+    }
 }
 
-async fn start(config: Config, config_path: impl AsRef<Path> + Clone) {
-    let storage = SledStorage::init(&config.storage_path);
-    let http_client = reqwest::ClientBuilder::default().build().unwrap();
+async fn start(config: Config, config_path: String) -> Result<()> {
+    let graceful_shutdown_rx = graceful_shutdown();
+
+    let storage = Storage::init_sled(&config.storage_path);
+    let http_client = reqwest::ClientBuilder::default().build()?;
 
     let (vr_sender, vr_receiver) = mpsc::channel::<VerifiedResult>();
 
-    let mut client = Client {
+    let metrics_port = config.metrics_port;
+    tokio::spawn(crate::metrics::start(
+        vr_receiver,
+        storage.clone(),
+        config.validator_timeout,
+        config.chain_block_interval,
+    ));
+    tokio::spawn(run_metrics_exporter(metrics_port));
+
+    let mut sender_interval =
+        tokio::time::interval(tokio::time::Duration::from_secs(config.sender_interval));
+    let mut validator_interval =
+        tokio::time::interval(tokio::time::Duration::from_secs(config.validator_interval));
+
+    let config = Arc::new(RwLock::new(config));
+
+    hot_reload(config.clone(), config_path).await?;
+
+    let client = Client {
         config,
         storage: storage.clone(),
         http_client,
         vr_sender,
     };
-
-    let metrics_port = client.config.metrics_port;
-    tokio::spawn(crate::metrics::start(
-        vr_receiver,
-        storage.clone(),
-        client.config.validator_timeout,
-        client.config.chain_block_interval,
-    ));
-    tokio::spawn(run_metrics_exporter(metrics_port));
-
-    let mut config_md5 = calculate_md5(&config_path).unwrap();
-
-    let mut sender_interval = tokio::time::interval(tokio::time::Duration::from_secs(
-        client.config.sender_interval,
-    ));
-    let mut validator_interval = tokio::time::interval(tokio::time::Duration::from_secs(
-        client.config.validator_interval,
-    ));
-    let mut hot_update_interval = tokio::time::interval(tokio::time::Duration::from_secs(
-        client.config.hot_update_interval,
-    ));
 
     loop {
         tokio::select! {
@@ -104,9 +112,11 @@ async fn start(config: Config, config_path: impl AsRef<Path> + Clone) {
             _ = validator_interval.tick() => {
                 client.validator().await;
             }
-            _ = hot_update_interval.tick() => {
-                client.hot_update(&mut config_md5, config_path.clone());
+            _ = graceful_shutdown_rx.recv_async() => {
+                info!("graceful_shutdown");
+                break;
             }
         }
     }
+    Ok(())
 }

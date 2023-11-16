@@ -12,23 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 use crate::record::VerifiedResult;
-use common::time::{get_latest_finalized_minute, get_readable_time_from_minute, unix_now};
-use hyper::{
-    header::CONTENT_TYPE,
-    service::{make_service_fn, service_fn},
-    Body, Method, Request, Response, Server,
-};
+use crate::time::{get_latest_finalized_minute, get_readable_time_from_minute, unix_now};
+
+use anyhow::Result;
+use axum::body::Body;
+use axum::response::{IntoResponse, Response};
+use axum::routing::get;
+use axum::{Json, Router};
+use common_rs::restful::{shutdown_signal, RESTfulError};
 use prometheus::{
     core::{AtomicU64, GenericCounter},
     gather, register_int_counter, Encoder, TextEncoder,
 };
-use std::convert::Infallible;
+use reqwest::header::CONTENT_TYPE;
+use reqwest::StatusCode;
+use serde_json::json;
+use std::net::SocketAddr;
 use std::sync::mpsc::Receiver;
-use storage::{sledb::SledStorage, Storage};
+use storage_dal::Storage;
 
 pub async fn start(
     vr_receiver: Receiver<VerifiedResult>,
-    storage: SledStorage,
+    storage: Storage,
     check_timeout: u32,
     chain_block_interval: u32,
 ) {
@@ -81,25 +86,30 @@ fn recover_data(
     sent_failed_counter: &GenericCounter<AtomicU64>,
     unavailable_counter: &GenericCounter<AtomicU64>,
     observed_counter: &GenericCounter<AtomicU64>,
-    storage: SledStorage,
+    storage: Storage,
     check_timeout: u32,
     chain_block_interval: u32,
 ) {
     let finalized_minute =
         get_latest_finalized_minute(unix_now(), check_timeout, chain_block_interval);
-    let (sent_failed, unavailable, observed) = storage.all::<VerifiedResult>().iter().fold(
+    let (sent_failed, unavailable, observed) = storage.scan::<VerifiedResult>().fold(
         (0, 0, 0),
         |(mut sent_failed, mut unavailable, mut observed), vr| {
-            if vr.timestamp <= finalized_minute {
-                observed += 1;
-                if vr.sent_failed_num != 0 || vr.failed_num != 0 {
-                    unavailable += 1;
-                    if vr.sent_failed_num != 0 {
-                        sent_failed += 1;
+            if let Ok(vr_entry) = vr {
+                if let Some(vr) = storage.get_by_path::<VerifiedResult>(vr_entry.path()) {
+                    if vr.timestamp <= finalized_minute {
+                        observed += 1;
+                        if vr.sent_failed_num != 0 || vr.failed_num != 0 {
+                            unavailable += 1;
+                            if vr.sent_failed_num != 0 {
+                                sent_failed += 1;
+                            }
+                        };
                     }
-                };
+                    return (sent_failed, unavailable, observed);
+                }
             }
-            (sent_failed, unavailable, observed)
+            (0, 0, 0)
         },
     );
     sent_failed_counter.inc_by(sent_failed);
@@ -114,42 +124,39 @@ fn recover_data(
     );
 }
 
-pub async fn run_metrics_exporter(
-    port: u16,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let make_svc =
-        make_service_fn(move |_conn| async move { Ok::<_, Infallible>(service_fn(serve_req)) });
-    let addr = ([0, 0, 0, 0], port).into();
-    let server = Server::bind(&addr).serve(make_svc);
-    info!("export metrics to {}", addr.to_string());
-    server.await?;
-    Ok(())
+pub async fn run_metrics_exporter(port: u16) -> Result<()> {
+    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+
+    let app = Router::new()
+        .route("/metrics", get(metrics))
+        .fallback(|| async {
+            debug!("Not Found");
+            (
+                StatusCode::NOT_FOUND,
+                Json(json!({
+                    "code": 404,
+                    "message": "Not Found",
+                })),
+            )
+        });
+
+    info!("metrics listening on {}", addr);
+    axum::Server::bind(&addr)
+        .serve(app.into_make_service())
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .map_err(|e| anyhow::anyhow!("axum serve failed: {e}"))
 }
 
-async fn serve_req(req: Request<Body>) -> Result<Response<Body>, hyper::Error> {
-    let response = match (req.method(), req.uri().path()) {
-        (&Method::GET, "/metrics") => {
-            let mut buffer = vec![];
-            let encoder = TextEncoder::new();
-            let metric_families = gather();
-            encoder.encode(&metric_families, &mut buffer).unwrap();
+async fn metrics() -> Result<impl IntoResponse, RESTfulError> {
+    let mut buffer = vec![];
+    let encoder = TextEncoder::new();
+    let metric_families = gather();
+    encoder.encode(&metric_families, &mut buffer).unwrap();
 
-            Response::builder()
-                .status(200)
-                .header(CONTENT_TYPE, encoder.format_type())
-                .body(Body::from(buffer))
-                .unwrap()
-        }
-        _ => Response::builder()
-            .status(404)
-            .body(Body::from(
-                "
-                default:\n
-                /61616/metrics for sla-test-client\n
-                ",
-            ))
-            .unwrap(),
-    };
-
-    Ok(response)
+    Ok(Response::builder()
+        .status(200)
+        .header(CONTENT_TYPE, encoder.format_type())
+        .body(Body::from(buffer))
+        .unwrap())
 }

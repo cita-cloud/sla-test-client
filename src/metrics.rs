@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 use crate::record::VerifiedResult;
 use crate::time::{get_latest_finalized_minute, get_readable_time_from_minute, unix_now};
 
@@ -19,7 +20,7 @@ use axum::body::Body;
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
-use common_rs::restful::{shutdown_signal, RESTfulError};
+use common_rs::restful::RESTfulError;
 use prometheus::{
     core::{AtomicU64, GenericCounter},
     gather, register_int_counter, Encoder, TextEncoder,
@@ -31,12 +32,7 @@ use std::net::SocketAddr;
 use std::sync::mpsc::Receiver;
 use storage_dal::Storage;
 
-pub async fn start(
-    vr_receiver: Receiver<VerifiedResult>,
-    storage: Storage,
-    check_timeout: u32,
-    chain_block_interval: u32,
-) {
+pub async fn start(vr_receiver: Receiver<VerifiedResult>, storage: Storage, check_timeout: u64) {
     // sent_failed < unavailable < observed
     info!("metrics start observing");
     let sent_failed_counter =
@@ -51,7 +47,6 @@ pub async fn start(
         &observed_counter,
         storage,
         check_timeout,
-        chain_block_interval,
     );
     loop {
         if let Ok(vr) = vr_receiver.recv() {
@@ -87,11 +82,9 @@ fn recover_data(
     unavailable_counter: &GenericCounter<AtomicU64>,
     observed_counter: &GenericCounter<AtomicU64>,
     storage: Storage,
-    check_timeout: u32,
-    chain_block_interval: u32,
+    check_timeout: u64,
 ) {
-    let finalized_minute =
-        get_latest_finalized_minute(unix_now(), check_timeout, chain_block_interval);
+    let finalized_minute = get_latest_finalized_minute(unix_now(), check_timeout);
     let (sent_failed, unavailable, observed) = storage.scan::<VerifiedResult>().fold(
         (0, 0, 0),
         |(mut sent_failed, mut unavailable, mut observed), vr| {
@@ -143,7 +136,7 @@ pub async fn run_metrics_exporter(port: u16) -> Result<()> {
     info!("metrics listening on {}", addr);
     axum::Server::bind(&addr)
         .serve(app.into_make_service())
-        .with_graceful_shutdown(shutdown_signal())
+        // .with_graceful_shutdown(shutdown_signal())
         .await
         .map_err(|e| anyhow::anyhow!("axum serve failed: {e}"))
 }

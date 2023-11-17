@@ -23,12 +23,8 @@ pub fn ms_to_minute_scale(ms: u64) -> u64 {
     (ms as f64 / 1_000.0 / 60.0).trunc() as u64
 }
 
-pub fn get_latest_finalized_minute(
-    time: u64,
-    check_timeout: u32,
-    chain_block_interval: u32,
-) -> u64 {
-    ms_to_minute_scale(time - (check_timeout as u64 * chain_block_interval as u64 * 1000)) - 1
+pub fn get_latest_finalized_minute(time: u64, check_timeout: u64) -> u64 {
+    ms_to_minute_scale(time - (check_timeout * 1000)) - 1
 }
 
 pub fn get_readable_time_from_minute(timestamp: u64) -> String {

@@ -1,15 +1,17 @@
-sender_interval = 1
-checker_interval = 10
+sender_interval = 10
+validator_interval = 10
 storage_path = "record_db"
-cache_url = "http://${CHAIN_NAME}-cache:8000"
-# Be consistent with data_for_send.block_count
-check_timeout = 20
+auto_api_url = "http://124.71.204.213"
+# Be consistent with data_for_send.timeout
+validator_timeout = 120
 data_for_send = [
     """{
-    "block_count": 20,
-    "data": "0x4f2be91f",
-    "quota": 30000,
-    "to": "0xedf40060586015710aad88b7202b92eac418e660",
-    "value": "0x0"
+    "to": "0x1879C8B68c50A4D4eeC9852325d32B60B43f3FbD",
+    "data": "0xabcd1234",
+    "timeout": 120
     }""",
 ]
+
+# [log_config]
+# max_level = "debug"
+# filter = "debug,hyper=info,opendal=info,sled=info"

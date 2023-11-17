@@ -84,7 +84,6 @@ async fn start(config: Config, config_path: String) -> Result<()> {
         vr_receiver,
         storage.clone(),
         config.validator_timeout,
-        config.chain_block_interval,
     ));
     tokio::spawn(run_metrics_exporter(metrics_port));
 

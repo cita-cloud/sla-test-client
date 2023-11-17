@@ -22,15 +22,11 @@ pub struct Config {
     pub sender_interval: u64,
     /// Units in second
     pub validator_interval: u64,
-    /// Units in block
-    pub validator_timeout: u32,
     /// Units in second
-    pub chain_block_interval: u32,
-    /// Units in second
-    pub hot_update_interval: u64,
+    pub validator_timeout: u64,
     pub log_config: LogConfig,
     pub storage_path: String,
-    pub cache_url: String,
+    pub auto_api_url: String,
     pub metrics_port: u16,
     pub data_for_send: Vec<String>,
 }
@@ -40,14 +36,12 @@ impl Default for Config {
         Self {
             sender_interval: 30,
             validator_interval: 10,
-            hot_update_interval: 5,
             log_config: Default::default(),
             storage_path: "default_db".to_string(),
-            cache_url: "http://127.0.0.1:32056".to_string(),
+            auto_api_url: "http://127.0.0.1:32056".to_string(),
             metrics_port: 61616,
             data_for_send: vec![],
-            validator_timeout: 20,
-            chain_block_interval: 3,
+            validator_timeout: 300,
         }
     }
 }

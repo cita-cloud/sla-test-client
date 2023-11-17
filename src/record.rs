@@ -23,12 +23,12 @@ pub struct Record {
     pub api: String,
     pub data: String,
     pub resp: Value,
-    pub status: u8,
+    pub status: u16,
 }
 
 impl Record {
     pub fn add_resp(&mut self, resp: Value) {
-        self.status = resp["status"].as_u64().unwrap() as u8;
+        self.status = resp["code"].as_u64().unwrap() as u16;
         self.resp = resp;
     }
 }

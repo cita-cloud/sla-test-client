@@ -28,7 +28,8 @@ pub struct Config {
     pub storage_path: String,
     pub auto_api_url: String,
     pub metrics_port: u16,
-    pub data_for_send: Vec<String>,
+    pub chain_for_send: Vec<String>,
+    pub data_for_send: String,
 }
 
 impl Default for Config {
@@ -40,8 +41,9 @@ impl Default for Config {
             storage_path: "default_db".to_string(),
             auto_api_url: "http://127.0.0.1:32056".to_string(),
             metrics_port: 61616,
-            data_for_send: vec![],
+            chain_for_send: vec![],
             validator_timeout: 300,
+            data_for_send: Default::default(),
         }
     }
 }

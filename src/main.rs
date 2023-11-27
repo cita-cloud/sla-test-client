@@ -12,15 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![forbid(unsafe_code)]
-#![warn(
-    missing_copy_implementations,
-    missing_debug_implementations,
-    unused_crate_dependencies,
-    clippy::missing_const_for_fn,
-    unused_extern_crates
-)]
-
 mod client;
 mod config;
 mod metrics;
@@ -35,7 +26,10 @@ use clap::Parser;
 use cloud_util::graceful_shutdown::graceful_shutdown;
 use common_rs::configure::{file_config, hot_reload};
 use parking_lot::RwLock;
-use std::sync::{mpsc, Arc};
+use std::{
+    sync::{mpsc, Arc},
+    time::Duration,
+};
 use storage_dal::Storage;
 
 use client::Client;
@@ -75,7 +69,10 @@ async fn start(config: Config, config_path: String) -> Result<()> {
     let graceful_shutdown_rx = graceful_shutdown();
 
     let storage = Storage::init_sled(&config.storage_path);
-    let http_client = reqwest::ClientBuilder::default().build()?;
+    let http_client = reqwest::ClientBuilder::default()
+        .connect_timeout(Duration::from_secs(1))
+        .timeout(Duration::from_secs(2))
+        .build()?;
 
     let (vr_sender, vr_receiver) = mpsc::channel::<VerifiedResult>();
 
@@ -84,6 +81,7 @@ async fn start(config: Config, config_path: String) -> Result<()> {
         vr_receiver,
         storage.clone(),
         config.validator_timeout,
+        config.chain_for_send.clone(),
     ));
     tokio::spawn(run_metrics_exporter(metrics_port));
 

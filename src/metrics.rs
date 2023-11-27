@@ -21,6 +21,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use axum::{Json, Router};
 use common_rs::restful::RESTfulError;
+use heck::ToSnakeCase;
 use prometheus::{
     core::{AtomicU64, GenericCounter},
     gather, register_int_counter, Encoder, TextEncoder,
@@ -28,28 +29,73 @@ use prometheus::{
 use reqwest::header::CONTENT_TYPE;
 use reqwest::StatusCode;
 use serde_json::json;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::mpsc::Receiver;
-use storage_dal::Storage;
+use storage_dal::{Storage, StorageData};
 
-pub async fn start(vr_receiver: Receiver<VerifiedResult>, storage: Storage, check_timeout: u64) {
+struct ChainCounter {
+    sent_failed_counter: GenericCounter<AtomicU64>,
+    unavailable_counter: GenericCounter<AtomicU64>,
+    observed_counter: GenericCounter<AtomicU64>,
+}
+
+pub async fn start(
+    vr_receiver: Receiver<VerifiedResult>,
+    storage: Storage,
+    check_timeout: u64,
+    chain_for_send: Vec<String>,
+) {
     // sent_failed < unavailable < observed
     info!("metrics start observing");
-    let sent_failed_counter =
-        register_int_counter!("Sent_failed_Counter", "SLA test sent failed counter(time)").unwrap();
-    let unavailable_counter =
-        register_int_counter!("Unavailable_Counter", "SLA test unavailable counter(min)").unwrap();
-    let observed_counter =
-        register_int_counter!("Observed_Counter", "SLA test total observed counter(min)").unwrap();
-    recover_data(
-        &sent_failed_counter,
-        &unavailable_counter,
-        &observed_counter,
-        storage,
-        check_timeout,
-    );
+    let mut chain_counter_map: HashMap<String, ChainCounter> = HashMap::new();
+    for chain_name in chain_for_send {
+        let sent_failed_counter = register_int_counter!(
+            format!("{}_Sent_failed_Counter", chain_name.to_snake_case()),
+            format!("SLA test sent failed counter(time) for {}", chain_name)
+        )
+        .unwrap();
+        let unavailable_counter = register_int_counter!(
+            format!("{}_Unavailable_Counter", chain_name.to_snake_case()),
+            format!("SLA test unavailable counter(min) for {}", chain_name)
+        )
+        .unwrap();
+        let observed_counter = register_int_counter!(
+            format!("{}_Observed_Counter", chain_name.to_snake_case()),
+            format!("SLA test total observed counter(min) for {}", chain_name)
+        )
+        .unwrap();
+        recover_data(
+            &sent_failed_counter,
+            &unavailable_counter,
+            &observed_counter,
+            storage.clone(),
+            check_timeout,
+            chain_name.clone(),
+        );
+        chain_counter_map.insert(
+            chain_name,
+            ChainCounter {
+                sent_failed_counter,
+                unavailable_counter,
+                observed_counter,
+            },
+        );
+    }
     loop {
         if let Ok(vr) = vr_receiver.recv() {
+            let ChainCounter {
+                sent_failed_counter,
+                unavailable_counter,
+                observed_counter,
+            } = chain_counter_map
+                .get_mut(&vr.chain_name)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "chain_counter_map get failed, chain_name: {}",
+                        vr.chain_name
+                    )
+                });
             observed_counter.inc();
             if vr.sent_failed_num != 0 {
                 warn!(
@@ -83,33 +129,44 @@ fn recover_data(
     observed_counter: &GenericCounter<AtomicU64>,
     storage: Storage,
     check_timeout: u64,
+    chain_name: String,
 ) {
     let finalized_minute = get_latest_finalized_minute(unix_now(), check_timeout);
-    let (sent_failed, unavailable, observed) = storage.scan::<VerifiedResult>().fold(
-        (0, 0, 0),
-        |(mut sent_failed, mut unavailable, mut observed), vr| {
-            if let Ok(vr_entry) = vr {
-                if let Some(vr) = storage.get_by_path::<VerifiedResult>(vr_entry.path()) {
-                    if vr.timestamp <= finalized_minute {
-                        observed += 1;
-                        if vr.sent_failed_num != 0 || vr.failed_num != 0 {
-                            unavailable += 1;
-                            if vr.sent_failed_num != 0 {
-                                sent_failed += 1;
-                            }
-                        };
+    let (sent_failed, unavailable, observed) = storage
+        .op
+        .blocking()
+        .lister(&format!(
+            "STRUCTURED/{}/{}/",
+            VerifiedResult::name(),
+            chain_name
+        ))
+        .unwrap()
+        .fold(
+            (0, 0, 0),
+            |(mut sent_failed, mut unavailable, mut observed), vr| {
+                if let Ok(vr_entry) = vr {
+                    if let Some(vr) = storage.get_by_path::<VerifiedResult>(vr_entry.path()) {
+                        if vr.timestamp <= finalized_minute {
+                            observed += 1;
+                            if vr.sent_failed_num != 0 || vr.failed_num != 0 {
+                                unavailable += 1;
+                                if vr.sent_failed_num != 0 {
+                                    sent_failed += 1;
+                                }
+                            };
+                        }
+                        return (sent_failed, unavailable, observed);
                     }
-                    return (sent_failed, unavailable, observed);
                 }
-            }
-            (0, 0, 0)
-        },
-    );
+                (0, 0, 0)
+            },
+        );
     sent_failed_counter.inc_by(sent_failed);
     unavailable_counter.inc_by(unavailable);
     observed_counter.inc_by(observed);
     info!(
-        "recover metrics data before: {}, sent_failed: {}, unavailable: {}, observed: {}",
+        "recover metrics data before({}): {}, sent_failed: {}, unavailable: {}, observed: {}",
+        chain_name,
         get_readable_time_from_minute(finalized_minute),
         sent_failed,
         unavailable,

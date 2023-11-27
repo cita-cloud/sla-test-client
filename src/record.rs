@@ -36,6 +36,7 @@ impl Record {
 #[derive(StorageData, Debug, Clone, Default, Deserialize, Serialize)]
 pub struct UnverifiedTX {
     pub tx_hash: String,
+    pub chain_name: String,
     /// Units in ms
     pub sent_timestamp: u64,
 }
@@ -44,6 +45,7 @@ pub struct UnverifiedTX {
 pub struct VerifiedResult {
     /// Units in minutes
     pub timestamp: u64,
+    pub chain_name: String,
     pub sent_num: u8,
     pub sent_failed_num: u8,
     pub failed_num: u8,
@@ -51,13 +53,14 @@ pub struct VerifiedResult {
 }
 
 impl VerifiedResult {
-    pub const fn new(timestamp: u64) -> Self {
+    pub const fn new(timestamp: u64, chain_name: String) -> Self {
         Self {
             timestamp,
             sent_num: 0,
             sent_failed_num: 0,
             failed_num: 0,
             succeed_num: 0,
+            chain_name,
         }
     }
 }

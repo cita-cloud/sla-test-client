@@ -32,11 +32,11 @@ pub(crate) struct Client {
 impl Client {
     pub async fn sender(&self) {
         let config = self.config.read().clone();
-        for data in config.data_for_send {
+        for chain_name in config.chain_for_send {
             let mut record = Record {
                 timestamp: unix_now(),
-                api: "/auto_api/api/cita-cloud-test/send_tx".to_string(),
-                data,
+                api: format!("/auto_api/api/{chain_name}/send_tx"),
+                data: config.data_for_send.clone(),
                 resp: json!(null),
                 status: 0,
             };
@@ -61,6 +61,7 @@ impl Client {
                                 let utx = UnverifiedTX {
                                     tx_hash: resp["data"]["hash"].to_string().replace('\"', ""),
                                     sent_timestamp: record.timestamp,
+                                    chain_name: chain_name.clone(),
                                 };
                                 debug!("insert: {:?}", &utx);
                                 self.storage.insert(&utx.tx_hash.clone(), utx);
@@ -76,17 +77,18 @@ impl Client {
             let current_minute = ms_to_minute_scale(record.timestamp);
             let mut vr = self
                 .storage
-                .get::<VerifiedResult>(&current_minute.to_string())
+                .get::<VerifiedResult>(&format!("{}/{}", chain_name, current_minute))
                 .unwrap_or_else(|| {
                     // Record the result of the first two timeout intervals at the current moment
-                    let res = self.storage.get::<VerifiedResult>(
-                        &get_latest_finalized_minute(record.timestamp, config.validator_timeout)
-                            .to_string(),
-                    );
+                    let res = self.storage.get::<VerifiedResult>(&format!(
+                        "{}/{}",
+                        chain_name,
+                        get_latest_finalized_minute(record.timestamp, config.validator_timeout,)
+                    ));
                     if let Some(res) = res {
                         let _ = self.vr_sender.send(res);
                     }
-                    VerifiedResult::new(current_minute)
+                    VerifiedResult::new(current_minute, chain_name.clone())
                 });
             if record.status == 200 {
                 vr.sent_num += 1;
@@ -95,10 +97,11 @@ impl Client {
                 vr.sent_failed_num += 1;
                 warn!("sender insert: {:?}", &vr);
             }
-            self.storage.insert(&current_minute.to_string(), vr);
+            self.storage
+                .insert(&format!("{}/{}", chain_name, current_minute), vr);
 
-            debug!("insert: {:?}", &record);
-            self.storage.insert(&current_minute.to_string(), record);
+            debug!("sender: {:?}", &record);
+            // self.storage.insert(&current_minute.to_string(), record);
         }
     }
 
@@ -113,8 +116,8 @@ impl Client {
             let current_minute = ms_to_minute_scale(utx.sent_timestamp);
             let mut vr = self
                 .storage
-                .get::<VerifiedResult>(&current_minute.to_string())
-                .unwrap_or_else(|| VerifiedResult::new(current_minute));
+                .get::<VerifiedResult>(&format!("{}/{}", utx.chain_name, current_minute))
+                .unwrap_or_else(|| VerifiedResult::new(current_minute, utx.chain_name.clone()));
             if unix_now() - utx.sent_timestamp > (config.validator_timeout * 1000) {
                 // timeout and failed
                 warn!("Failed: {:?}", &utx.tx_hash);
@@ -122,15 +125,16 @@ impl Client {
 
                 vr.failed_num += 1;
                 warn!("validator insert: {:?}", &vr);
-                self.storage.insert(&current_minute.to_string(), vr);
+                self.storage
+                    .insert(&format!("{}/{}", utx.chain_name, current_minute), vr);
                 continue;
             }
 
-            self.verify_from_cache(utx, vr, current_minute).await;
+            self.verify_from_api(utx, vr, current_minute).await;
         }
     }
 
-    async fn verify_from_cache(
+    async fn verify_from_api(
         &self,
         utx: UnverifiedTX,
         mut vr: VerifiedResult,
@@ -172,11 +176,12 @@ impl Client {
 
             vr.succeed_num += 1;
             info!("validator insert: {:?}", &vr);
-            self.storage.insert(&current_minute.to_string(), vr);
+            self.storage
+                .insert(&format!("{}/{}", utx.chain_name, current_minute), vr);
         }
 
-        debug!("insert: {:?}", &record);
-        self.storage
-            .insert(&format!("{}", &record.timestamp), record);
+        debug!("verify: {:?}", &record);
+        // self.storage
+        //     .insert(&format!("{}", &record.timestamp), record);
     }
 }

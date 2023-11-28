@@ -17,9 +17,10 @@ use crate::{
     record::{Record, UnverifiedTX, VerifiedResult},
     time::{get_latest_finalized_minute, ms_to_minute_scale, unix_now},
 };
+use flume::Sender;
 use parking_lot::RwLock;
 use serde_json::{json, Value};
-use std::sync::{mpsc::Sender, Arc};
+use std::sync::Arc;
 use storage_dal::Storage;
 
 pub(crate) struct Client {

@@ -21,15 +21,12 @@ mod time;
 #[macro_use]
 extern crate tracing as logger;
 
-use anyhow::{Ok, Result};
 use clap::Parser;
 use cloud_util::graceful_shutdown::graceful_shutdown;
-use common_rs::configure::{file_config, hot_reload};
+use color_eyre::eyre::Result;
+use common_rs::configure::{config_hot_reload, file_config};
 use parking_lot::RwLock;
-use std::{
-    sync::{mpsc, Arc},
-    time::Duration,
-};
+use std::{sync::Arc, time::Duration};
 use storage_dal::Storage;
 
 use client::Client;
@@ -74,7 +71,7 @@ async fn start(config: Config, config_path: String) -> Result<()> {
         .timeout(Duration::from_secs(2))
         .build()?;
 
-    let (vr_sender, vr_receiver) = mpsc::channel::<VerifiedResult>();
+    let (vr_sender, vr_receiver) = flume::unbounded::<VerifiedResult>();
 
     let metrics_port = config.metrics_port;
     tokio::spawn(crate::metrics::start(
@@ -83,7 +80,11 @@ async fn start(config: Config, config_path: String) -> Result<()> {
         config.validator_timeout,
         config.chain_for_send.clone(),
     ));
-    tokio::spawn(run_metrics_exporter(metrics_port));
+    let graceful_shutdown_metrics = graceful_shutdown_rx.clone();
+    tokio::spawn(run_metrics_exporter(
+        metrics_port,
+        graceful_shutdown_metrics,
+    ));
 
     let mut sender_interval =
         tokio::time::interval(tokio::time::Duration::from_secs(config.sender_interval));
@@ -92,7 +93,7 @@ async fn start(config: Config, config_path: String) -> Result<()> {
 
     let config = Arc::new(RwLock::new(config));
 
-    hot_reload(config.clone(), config_path).await?;
+    config_hot_reload(config.clone(), config_path)?;
 
     let client = Client {
         config,

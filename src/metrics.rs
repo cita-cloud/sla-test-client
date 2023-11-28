@@ -15,12 +15,8 @@
 use crate::record::VerifiedResult;
 use crate::time::{get_latest_finalized_minute, get_readable_time_from_minute, unix_now};
 
-use anyhow::Result;
-use axum::body::Body;
-use axum::response::{IntoResponse, Response};
-use axum::routing::get;
-use axum::{Json, Router};
-use common_rs::restful::RESTfulError;
+use color_eyre::eyre::Result;
+use flume::Receiver;
 use heck::ToSnakeCase;
 use prometheus::{
     core::{AtomicU64, GenericCounter},
@@ -28,10 +24,10 @@ use prometheus::{
 };
 use reqwest::header::CONTENT_TYPE;
 use reqwest::StatusCode;
-use serde_json::json;
+use salvo::prelude::*;
+
 use std::collections::HashMap;
-use std::net::SocketAddr;
-use std::sync::mpsc::Receiver;
+
 use storage_dal::{Storage, StorageData};
 
 struct ChainCounter {
@@ -174,39 +170,31 @@ fn recover_data(
     );
 }
 
-pub async fn run_metrics_exporter(port: u16) -> Result<()> {
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+pub async fn run_metrics_exporter(port: u16, rx: Receiver<()>) -> Result<()> {
+    let router = Router::new().push(Router::with_path("metrics").get(metrics));
 
-    let app = Router::new()
-        .route("/metrics", get(metrics))
-        .fallback(|| async {
-            debug!("Not Found");
-            (
-                StatusCode::NOT_FOUND,
-                Json(json!({
-                    "code": 404,
-                    "message": "Not Found",
-                })),
-            )
-        });
+    info!("metrics listening on 0.0.0.0:{port}");
 
-    info!("metrics listening on {}", addr);
-    axum::Server::bind(&addr)
-        .serve(app.into_make_service())
-        // .with_graceful_shutdown(shutdown_signal())
-        .await
-        .map_err(|e| anyhow::anyhow!("axum serve failed: {e}"))
+    let acceptor = TcpListener::new(format!("0.0.0.0:{port}")).bind().await;
+    Server::new(acceptor)
+        .serve_with_graceful_shutdown(
+            router,
+            async move { if let Ok(()) = rx.recv_async().await {} },
+            None,
+        )
+        .await;
+    Ok(())
 }
 
-async fn metrics() -> Result<impl IntoResponse, RESTfulError> {
+#[handler]
+async fn metrics(res: &mut Response) {
     let mut buffer = vec![];
     let encoder = TextEncoder::new();
     let metric_families = gather();
     encoder.encode(&metric_families, &mut buffer).unwrap();
 
-    Ok(Response::builder()
-        .status(200)
-        .header(CONTENT_TYPE, encoder.format_type())
-        .body(Body::from(buffer))
-        .unwrap())
+    res.status_code(StatusCode::OK)
+        .add_header(CONTENT_TYPE.as_str(), encoder.format_type(), true)
+        .unwrap();
+    res.write_body(buffer).unwrap();
 }

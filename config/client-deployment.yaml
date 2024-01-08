@@ -67,7 +67,7 @@ spec:
             - -c
             - /data/config/client.toml
           name: sla-test-client
-          image: "docker.io/citacloud/sla-test-client:v0.1.7"
+          image: "docker.io/citacloud/sla-test-client:v0.1.8"
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 61616

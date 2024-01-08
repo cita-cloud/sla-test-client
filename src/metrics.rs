@@ -23,7 +23,6 @@ use prometheus::{
     gather, register_int_counter, Encoder, TextEncoder,
 };
 use reqwest::header::CONTENT_TYPE;
-use reqwest::StatusCode;
 use salvo::prelude::*;
 
 use std::collections::HashMap;
@@ -176,13 +175,16 @@ pub async fn run_metrics_exporter(port: u16, rx: Receiver<()>) -> Result<()> {
     info!("metrics listening on 0.0.0.0:{port}");
 
     let acceptor = TcpListener::new(format!("0.0.0.0:{port}")).bind().await;
-    Server::new(acceptor)
-        .serve_with_graceful_shutdown(
-            router,
-            async move { if let Ok(()) = rx.recv_async().await {} },
-            None,
-        )
-        .await;
+
+    let server = Server::new(acceptor);
+    let handle = server.handle();
+    tokio::spawn(async move {
+        if let Ok(()) = rx.recv_async().await {
+            handle.stop_graceful(None);
+        }
+    });
+    server.serve(router).await;
+
     Ok(())
 }
 

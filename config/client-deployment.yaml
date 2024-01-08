@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: ConfigMap
+data:
+  client.toml: |+
+    sender_interval = 10
+    validator_interval = 10
+    storage_path = "record_db"
+    auto_api_url = "http://auto-tx-service"
+    # Be consistent with data_for_send.timeout
+    validator_timeout = 120
+    chain_for_send = [
+        "cita-cloud-test",
+        "cita-test",
+    ]
+    data_for_send = """{
+    "to": "0x1879C8B68c50A4D4eeC9852325d32B60B43f3FbD",
+    "data": "0xabcd1234",
+    "timeout": 120
+    }"""
+
+    [log_config]
+    max_level = "debug"
+    # filter = "debug"
+    filter = "debug,hyper=info,opendal=info,sled=info,reqwest=info"
+
+metadata:
+  name: sla-test-client-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sla-test-client
+  labels:
+    app.kubernetes.io/name: sla-test-client
+spec:
+  ports:
+    - name: sla-test-client
+      port: 61616
+      protocol: TCP
+      targetPort: 61616
+  selector:
+    app.kubernetes.io/name: sla-test-client
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  labels:
+    app.kubernetes.io/name: sla-test-client
+  name: sla-test-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sla-test-client
+  serviceName: ""
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sla-test-client
+    spec:
+      containers:
+        - command:
+            - client
+            - -c
+            - /data/config/client.toml
+          name: sla-test-client
+          image: "docker.io/citacloud/sla-test-client:v0.1.7"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 61616
+              name: sla-test-client
+              protocol: TCP
+          resources:
+            limits:
+              cpu: 4000m
+              memory: 8192Mi
+            requests:
+              cpu: 10m
+              memory: 32Mi
+          volumeMounts:
+            - mountPath: /data
+              name: datadir
+            - mountPath: /data/config
+              name: sla-test-client-config
+            - mountPath: /data/log
+              name: sla-test-client-log
+          workingDir: /data
+      volumes:
+        - configMap:
+            name: sla-test-client-config
+          name: sla-test-client-config
+  volumeClaimTemplates:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
+        name: datadir
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        storageClassName: ${SC}

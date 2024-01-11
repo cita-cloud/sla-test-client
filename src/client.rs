@@ -36,7 +36,7 @@ impl Client {
         for chain_name in config.chain_for_send {
             let mut record = Record {
                 timestamp: unix_now(),
-                api: format!("/auto_api/api/{chain_name}/send_tx"),
+                api: format!("/auto_tx/api/{chain_name}/send_tx"),
                 data: config.data_for_send.clone(),
                 resp: json!(null),
                 status: 0,
@@ -143,7 +143,7 @@ impl Client {
     ) {
         let mut record = Record {
             timestamp: unix_now(),
-            api: "/auto_api/api/get_onchain_hash".to_string(),
+            api: "/auto_tx/api/get_onchain_hash".to_string(),
             resp: json!(null),
             status: 0,
             ..Default::default()

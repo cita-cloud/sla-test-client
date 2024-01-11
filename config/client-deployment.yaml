@@ -67,7 +67,7 @@ spec:
             - -c
             - /data/config/client.toml
           name: sla-test-client
-          image: "docker.io/citacloud/sla-test-client:v0.1.8"
+          image: "registry.devops.rivtower.com/cita-cloud/sla-test-client:v0.1.8"
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 61616
@@ -85,8 +85,6 @@ spec:
               name: datadir
             - mountPath: /data/config
               name: sla-test-client-config
-            - mountPath: /data/log
-              name: sla-test-client-log
           workingDir: /data
       volumes:
         - configMap:

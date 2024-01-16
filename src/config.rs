@@ -15,6 +15,15 @@
 use cloud_util::tracer::LogConfig;
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ChainSender {
+    pub chain_name: String,
+    pub sender_url: String,
+    pub data_for_send: String,
+    pub user_code: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
@@ -26,10 +35,9 @@ pub struct Config {
     pub validator_timeout: u64,
     pub log_config: LogConfig,
     pub storage_path: String,
-    pub auto_api_url: String,
+    pub verify_api_url: String,
     pub metrics_port: u16,
-    pub chain_for_send: Vec<String>,
-    pub data_for_send: String,
+    pub chain_sender_vec: Vec<ChainSender>,
 }
 
 impl Default for Config {
@@ -39,11 +47,10 @@ impl Default for Config {
             validator_interval: 10,
             log_config: Default::default(),
             storage_path: "default_db".to_string(),
-            auto_api_url: "http://127.0.0.1:32056".to_string(),
+            verify_api_url: "http://127.0.0.1:3000/auto_tx/api/get_onchain_hash".to_string(),
             metrics_port: 61616,
-            chain_for_send: vec![],
+            chain_sender_vec: vec![],
             validator_timeout: 300,
-            data_for_send: Default::default(),
         }
     }
 }

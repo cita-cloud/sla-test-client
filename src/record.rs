@@ -22,6 +22,7 @@ pub struct Record {
     pub timestamp: u64,
     pub api: String,
     pub data: String,
+    pub user_code: String,
     pub resp: Value,
     pub status: u16,
 }
@@ -39,6 +40,7 @@ pub struct UnverifiedTX {
     pub chain_name: String,
     /// Units in ms
     pub sent_timestamp: u64,
+    pub user_code: String,
 }
 
 #[derive(StorageData, Debug, Clone, Default, Deserialize, Serialize)]

@@ -78,7 +78,11 @@ async fn start(config: Config, config_path: String) -> Result<()> {
         vr_receiver,
         storage.clone(),
         config.validator_timeout,
-        config.chain_for_send.clone(),
+        config
+            .chain_sender_vec
+            .iter()
+            .map(|chain_sender| chain_sender.chain_name.clone())
+            .collect::<Vec<_>>(),
     ));
     let graceful_shutdown_metrics = graceful_shutdown_rx.clone();
     tokio::spawn(run_metrics_exporter(

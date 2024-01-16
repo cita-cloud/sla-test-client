@@ -33,20 +33,21 @@ pub(crate) struct Client {
 impl Client {
     pub async fn sender(&self) {
         let config = self.config.read().clone();
-        for chain_name in config.chain_for_send {
+        for chain_sender in config.chain_sender_vec {
             let mut record = Record {
                 timestamp: unix_now(),
-                api: format!("/auto_tx/api/{chain_name}/send_tx"),
-                data: config.data_for_send.clone(),
+                api: chain_sender.sender_url,
+                data: chain_sender.data_for_send.clone(),
                 resp: json!(null),
                 status: 0,
+                user_code: chain_sender.user_code,
             };
             match self
                 .http_client
-                .post(format!("{}{}", config.auto_api_url, &record.api))
+                .post(&record.api)
                 .header("Content-Type", "application/json")
                 .header("request_key", record.timestamp.to_string())
-                .header("user_code", "sla-test")
+                .header("user_code", &record.user_code)
                 .body(record.data.clone())
                 .send()
                 .await
@@ -62,7 +63,8 @@ impl Client {
                                 let utx = UnverifiedTX {
                                     tx_hash: resp["data"]["hash"].to_string().replace('\"', ""),
                                     sent_timestamp: record.timestamp,
-                                    chain_name: chain_name.clone(),
+                                    chain_name: chain_sender.chain_name.clone(),
+                                    user_code: record.user_code.clone(),
                                 };
                                 debug!("insert: {:?}", &utx);
                                 self.storage.insert(&utx.tx_hash.clone(), utx);
@@ -78,18 +80,18 @@ impl Client {
             let current_minute = ms_to_minute_scale(record.timestamp);
             let mut vr = self
                 .storage
-                .get::<VerifiedResult>(&format!("{}/{}", chain_name, current_minute))
+                .get::<VerifiedResult>(&format!("{}/{}", chain_sender.chain_name, current_minute))
                 .unwrap_or_else(|| {
                     // Record the result of the first two timeout intervals at the current moment
                     let res = self.storage.get::<VerifiedResult>(&format!(
                         "{}/{}",
-                        chain_name,
+                        chain_sender.chain_name,
                         get_latest_finalized_minute(record.timestamp, config.validator_timeout,)
                     ));
                     if let Some(res) = res {
                         let _ = self.vr_sender.send(res);
                     }
-                    VerifiedResult::new(current_minute, chain_name.clone())
+                    VerifiedResult::new(current_minute, chain_sender.chain_name.clone())
                 });
             if record.status == 200 {
                 vr.sent_num += 1;
@@ -98,8 +100,10 @@ impl Client {
                 vr.sent_failed_num += 1;
                 warn!("sender insert: {:?}", &vr);
             }
-            self.storage
-                .insert(&format!("{}/{}", chain_name, current_minute), vr);
+            self.storage.insert(
+                &format!("{}/{}", chain_sender.chain_name, current_minute),
+                vr,
+            );
 
             debug!("sender: {:?}", &record);
             // self.storage.insert(&current_minute.to_string(), record);
@@ -131,7 +135,8 @@ impl Client {
                 continue;
             }
 
-            self.verify_from_api(utx, vr, current_minute).await;
+            self.verify_from_api(utx, vr, current_minute, &config.verify_api_url)
+                .await;
         }
     }
 
@@ -140,24 +145,22 @@ impl Client {
         utx: UnverifiedTX,
         mut vr: VerifiedResult,
         current_minute: u64,
+        verify_api_url: &str,
     ) {
         let mut record = Record {
             timestamp: unix_now(),
-            api: "/auto_tx/api/get_onchain_hash".to_string(),
+            api: verify_api_url.to_string(),
             resp: json!(null),
             status: 0,
+            user_code: utx.user_code.clone(),
             ..Default::default()
         };
 
         match self
             .http_client
-            .get(format!(
-                "{}{}",
-                self.config.read().auto_api_url,
-                &record.api,
-            ))
+            .get(&record.api)
             .header("request_key", utx.sent_timestamp.to_string())
-            .header("user_code", "sla-test")
+            .header("user_code", &record.user_code)
             .send()
             .await
         {

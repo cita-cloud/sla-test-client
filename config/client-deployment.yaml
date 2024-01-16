@@ -5,22 +5,32 @@ data:
     sender_interval = 10
     validator_interval = 10
     storage_path = "record_db"
-    auto_api_url = "http://auto-tx-service"
+    verify_api_url = "http://traefik-web-service/auto_api/api/get_onchain_hash"
     # Be consistent with data_for_send.timeout
     validator_timeout = 120
-    chain_for_send = [
-        "cita-cloud-test",
-        "cita-test",
-    ]
+
+    [[chain_sender_vec]]
+    chain_name = "cita-cloud-test"
+    sender_url = "http://traefik-web-service/auto_api/api/cita-cloud-test/send_tx"
+    user_code = "sla-test-user"
     data_for_send = """{
-    "to": "0x1879C8B68c50A4D4eeC9852325d32B60B43f3FbD",
-    "data": "0xabcd1234",
-    "timeout": 120
+        "to": "0x1879C8B68c50A4D4eeC9852325d32B60B43f3FbD",
+        "data": "0xabcd1234",
+        "timeout": 120
+    }"""
+
+    [[chain_sender_vec]]
+    chain_name = "cita-test"
+    sender_url = "http://traefik-web-service/auto_api/api/cita-test/send_tx"
+    user_code = "sla-test-user"
+    data_for_send = """{
+        "to": "0x1879C8B68c50A4D4eeC9852325d32B60B43f3FbD",
+        "data": "0xabcd1234",
+        "timeout": 120
     }"""
 
     [log_config]
     max_level = "debug"
-    # filter = "debug"
     filter = "debug,hyper=info,opendal=info,sled=info,reqwest=info"
 
 metadata:
@@ -67,7 +77,7 @@ spec:
             - -c
             - /data/config/client.toml
           name: sla-test-client
-          image: "registry.devops.rivtower.com/cita-cloud/sla-test-client:v0.1.8"
+          image: "registry.devops.rivtower.com/cita-cloud/sla-test-client:v0.2.0"
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 61616

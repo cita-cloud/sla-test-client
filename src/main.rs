@@ -67,8 +67,8 @@ async fn start(config: Config, config_path: String) -> Result<()> {
 
     let storage = Storage::init_sled(&config.storage_path);
     let http_client = reqwest::ClientBuilder::default()
-        .connect_timeout(Duration::from_secs(1))
-        .timeout(Duration::from_secs(2))
+        .connect_timeout(Duration::from_secs(2))
+        .timeout(Duration::from_secs(5))
         .build()?;
 
     let (vr_sender, vr_receiver) = flume::unbounded::<VerifiedResult>();

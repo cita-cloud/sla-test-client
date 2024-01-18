@@ -12,7 +12,7 @@ data:
     [[chain_sender_vec]]
     chain_name = "cita-cloud-test"
     sender_url = "http://traefik-web-service/auto_api/api/cita-cloud-test/send_tx"
-    user_code = "sla-test-user"
+    user_code = "cloud-sla-test-user"
     data_for_send = """{
         "to": "0x1879C8B68c50A4D4eeC9852325d32B60B43f3FbD",
         "data": "0xabcd1234",
@@ -22,7 +22,7 @@ data:
     [[chain_sender_vec]]
     chain_name = "cita-test"
     sender_url = "http://traefik-web-service/auto_api/api/cita-test/send_tx"
-    user_code = "sla-test-user"
+    user_code = "cita-sla-test-user"
     data_for_send = """{
         "to": "0x1879C8B68c50A4D4eeC9852325d32B60B43f3FbD",
         "data": "0xabcd1234",
@@ -77,8 +77,8 @@ spec:
             - -c
             - /data/config/client.toml
           name: sla-test-client
-          image: "registry.devops.rivtower.com/cita-cloud/sla-test-client:v0.2.0"
-          imagePullPolicy: IfNotPresent
+          image: "registry.devops.rivtower.com/cita-cloud/sla-test-client:latest"
+          imagePullPolicy: Always
           ports:
             - containerPort: 61616
               name: sla-test-client

@@ -67,7 +67,7 @@ impl Client {
                                     user_code: record.user_code.clone(),
                                 };
                                 debug!("insert: {:?}", &utx);
-                                self.storage.insert(&utx.tx_hash.clone(), utx);
+                                self.storage.insert(&utx.key(), utx);
                             }
                         }
                         Err(e) => error!("decoding resp from '{}' failed: {}", &record.api, e),
@@ -111,12 +111,12 @@ impl Client {
     }
 
     pub async fn validator(&self) {
-        let unverified_txs = self.storage.scan::<UnverifiedTX>();
+        let unverified_path_vec = self.storage.scan::<UnverifiedTX>();
         let config = self.config.read().clone();
-        for unverified_tx in unverified_txs {
+        for unverified_path in unverified_path_vec {
             let utx = self
                 .storage
-                .get_by_path::<UnverifiedTX>(unverified_tx.unwrap().path())
+                .get_by_path::<UnverifiedTX>(unverified_path.unwrap().path())
                 .unwrap();
             let current_minute = ms_to_minute_scale(utx.sent_timestamp);
             let mut vr = self
@@ -126,7 +126,7 @@ impl Client {
             if unix_now() - utx.sent_timestamp > (config.validator_timeout * 1000) {
                 // timeout and failed
                 warn!("Failed: {:?}", &utx.tx_hash);
-                self.storage.remove::<UnverifiedTX>(&utx.tx_hash);
+                self.storage.remove::<UnverifiedTX>(&utx.key());
 
                 vr.failed_num += 1;
                 warn!("validator insert: {:?}", &vr);
@@ -176,7 +176,7 @@ impl Client {
 
         if record.status == 200 {
             info!("Success: {:?}", &utx.tx_hash);
-            self.storage.remove::<UnverifiedTX>(&utx.tx_hash);
+            self.storage.remove::<UnverifiedTX>(&utx.key());
 
             vr.succeed_num += 1;
             info!("validator insert: {:?}", &vr);

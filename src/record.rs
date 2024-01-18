@@ -43,6 +43,15 @@ pub struct UnverifiedTX {
     pub user_code: String,
 }
 
+impl UnverifiedTX {
+    pub(crate) fn key(&self) -> String {
+        format!(
+            "{}-{}-{}",
+            self.chain_name, self.user_code, self.sent_timestamp
+        )
+    }
+}
+
 #[derive(StorageData, Debug, Clone, Default, Deserialize, Serialize)]
 pub struct VerifiedResult {
     /// Units in minutes
